@@ -97,6 +97,11 @@ struct Repository {
         }
     }
 
+    func deleteMessages(ids: [Int64]) throws {
+        guard !ids.isEmpty else { return }
+        _ = try writer.write { db in try Message.deleteAll(db, keys: ids) }
+    }
+
     func message(id: Int64) throws -> Message? {
         try writer.read { try Message.fetchOne($0, key: id) }
     }

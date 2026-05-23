@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(AppModel.self) private var app
     @AppStorage(AppSettings.menuBarEnabledKey) private var menuBarEnabled = true
     @AppStorage(AppSettings.notificationsEnabledKey) private var notificationsEnabled = true
 
@@ -19,9 +20,34 @@ struct SettingsView: View {
                         if on { Notifier.requestAuthorization() }
                     }
             }
+            Section("Maintenance") {
+                HStack {
+                    Button {
+                        app.runIntegrityCheck()
+                    } label: {
+                        Label("Verify Archive", systemImage: "checkmark.shield")
+                    }
+                    .disabled(app.isCheckingIntegrity)
+                    if app.isCheckingIntegrity { ProgressView().controlSize(.small) }
+                }
+                if let result = app.integrityResult {
+                    if result.missing == 0 {
+                        Label("All \(result.total) messages present.", systemImage: "checkmark.circle")
+                            .foregroundStyle(.green).font(.callout)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("\(result.missing) of \(result.total) messages are missing their file.", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange).font(.callout)
+                            Button(role: .destructive) { app.repairOrphans() } label: {
+                                Text("Remove \(result.missing) Orphaned Entr\(result.missing == 1 ? "y" : "ies")")
+                            }
+                        }
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 220)
+        .frame(width: 460, height: 360)
     }
 }
 

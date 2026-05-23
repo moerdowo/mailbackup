@@ -44,6 +44,11 @@ final class AppModel {
     private(set) var savedSearches: [SavedSearch] = AppModel.loadSavedSearches()
     private static let savedSearchesKey = "savedSearches"
 
+    struct IntegrityResult: Equatable { var total: Int; var missing: Int }
+    private(set) var isCheckingIntegrity = false
+    private(set) var integrityResult: IntegrityResult?
+    private var orphanIds: [Int64] = []
+
     let database: Database
     let repository: Repository
     private(set) var archiveRoot: URL
@@ -187,6 +192,70 @@ final class AppModel {
         guard let data = UserDefaults.standard.data(forKey: savedSearchesKey),
               let decoded = try? JSONDecoder().decode([SavedSearch].self, from: data) else { return [] }
         return decoded
+    }
+
+    // MARK: - Integrity check
+
+    /// Scans every archived message and verifies its `.eml` file exists on disk.
+    func runIntegrityCheck() {
+        guard !isCheckingIntegrity else { return }
+        isCheckingIntegrity = true
+        integrityResult = nil
+        orphanIds = []
+        let repo = repository
+        let store = archiveStore
+        let accountIds = accounts.map(\.id)
+
+        Task.detached { [weak self] in
+            var total = 0
+            var orphans: [Int64] = []
+            for accountId in accountIds {
+                let folders = (try? repo.folders(accountId: accountId)) ?? []
+                for folder in folders {
+                    guard let folderId = folder.id else { continue }
+                    var offset = 0
+                    while true {
+                        let page = (try? repo.messages(folderId: folderId, limit: 500, offset: offset)) ?? []
+                        if page.isEmpty { break }
+                        for message in page {
+                            total += 1
+                            let url = store.url(forRelativePath: message.emlPath)
+                            if !FileManager.default.fileExists(atPath: url.path), let id = message.id {
+                                orphans.append(id)
+                            }
+                        }
+                        offset += page.count
+                        if page.count < 500 { break }
+                    }
+                }
+            }
+            let finalTotal = total
+            let finalOrphans = orphans
+            await MainActor.run {
+                guard let self else { return }
+                self.isCheckingIntegrity = false
+                self.orphanIds = finalOrphans
+                self.integrityResult = IntegrityResult(total: finalTotal, missing: finalOrphans.count)
+                self.activityLog.log(
+                    "Integrity check: \(finalTotal) messages, \(finalOrphans.count) missing file\(finalOrphans.count == 1 ? "" : "s")",
+                    category: "Maintenance",
+                    level: finalOrphans.isEmpty ? .info : .warning
+                )
+            }
+        }
+    }
+
+    /// Removes index entries whose `.eml` is missing (found by the last check).
+    /// For server accounts these re-download on the next sync.
+    func repairOrphans() {
+        guard !orphanIds.isEmpty else { return }
+        try? repository.deleteMessages(ids: orphanIds)
+        SpotlightIndexer.deindexMessages(ids: orphanIds)
+        activityLog.log("Removed \(orphanIds.count) orphaned entr\(orphanIds.count == 1 ? "y" : "ies")", category: "Maintenance", level: .warning)
+        orphanIds = []
+        integrityResult = nil
+        reloadAccounts()
+        dataRevision &+= 1
     }
 
     // MARK: - Background sync
