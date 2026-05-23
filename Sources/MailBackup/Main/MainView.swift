@@ -140,6 +140,8 @@ private struct MainContent: View {
                 MessageDetailView(model: model)
                     .frame(minWidth: 420)
             }
+        case .search:
+            SearchView(model: model)
         default:
             DashboardView(model: model, onAddAccount: onAddAccount)
         }
@@ -153,6 +155,8 @@ private struct MainContent: View {
             }
             Label("Dashboard", systemImage: "square.grid.2x2")
                 .tag(SidebarItem.dashboard)
+            Label("Search", systemImage: "magnifyingglass")
+                .tag(SidebarItem.search)
             ForEach(model.accountNodes) { node in
                 Section {
                     ForEach(node.folders) { folder in
@@ -171,7 +175,10 @@ private struct MainContent: View {
             }
         }
         .listStyle(.sidebar)
-        .onChange(of: model.selection) { _, _ in model.refreshMessages() }
+        .onChange(of: model.selection) { _, _ in
+            model.searchText = ""   // start each view with a clean query
+            model.refreshMessages()
+        }
     }
 
     private var messageList: some View {
@@ -191,7 +198,7 @@ private struct MainContent: View {
     }
 }
 
-private struct MessageRow: View {
+struct MessageRow: View {
     let message: Message
 
     var body: some View {

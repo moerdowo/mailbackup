@@ -7,9 +7,11 @@ struct MessageContent {
     var attachments: [MIMEMessage.Attachment]
 }
 
-/// What the sidebar has selected: the dashboard overview or a specific folder.
+/// What the sidebar has selected: the dashboard overview, global search across
+/// all accounts, or a specific folder.
 enum SidebarItem: Hashable {
     case dashboard
+    case search
     case folder(Int64)
 }
 
@@ -74,16 +76,19 @@ final class MainModel {
     var totalFolders: Int { accountNodes.reduce(0) { $0 + $1.folders.count } }
 
     func refreshMessages() {
-        guard let folderId = selectedFolderId else {
-            messages = []
-            return
-        }
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                messages = try app.repository.messages(folderId: folderId)
-            } else {
-                messages = try app.repository.searchMessages(query: trimmed, folderId: folderId)
+            switch selection {
+            case .search:
+                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed)
+            case .folder(let id):
+                if trimmed.isEmpty {
+                    messages = try app.repository.messages(folderId: id)
+                } else {
+                    messages = try app.repository.searchMessages(query: trimmed, folderId: id)
+                }
+            default:
+                messages = []
             }
             if !messages.contains(where: { $0.id == selectedMessageId }) {
                 selectedMessageId = messages.first?.id
@@ -92,6 +97,16 @@ final class MainModel {
             errorMessage = error.localizedDescription
             messages = []
         }
+    }
+
+    /// "Account · Folder" label for a message, used in global search results.
+    func contextLabel(for message: Message) -> String {
+        let accountNode = accountNodes.first { $0.account.id == message.accountId }
+        let folderName = accountNode?.folders.first { $0.id == message.folderId }?.name
+        return [accountNode?.account.displayName, folderName]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     var selectedMessage: Message? {

@@ -8,8 +8,20 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Dashboard")
-                    .font(.largeTitle.bold())
+                HStack {
+                    Text("Dashboard")
+                        .font(.largeTitle.bold())
+                    Spacer()
+                    Button {
+                        model.searchText = ""
+                        model.selection = .search
+                    } label: {
+                        Label("Search Archive", systemImage: "magnifyingglass")
+                    }
+                    .controlSize(.large)
+                    .disabled(model.totalMessages == 0)
+                    .help("Search across all accounts")
+                }
 
                 SyncStatusCard(model: model, onAddAccount: onAddAccount)
 
