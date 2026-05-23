@@ -17,12 +17,32 @@ settings:
     CODE_SIGNING_ALLOWED: "NO"
     ENABLE_HARDENED_RUNTIME: "NO"
 
+packages:
+  swift-nio-imap:
+    url: https://github.com/apple/swift-nio-imap
+    from: "0.2.0"
+  swift-nio:
+    url: https://github.com/apple/swift-nio
+    from: "2.64.0"
+  swift-nio-ssl:
+    url: https://github.com/apple/swift-nio-ssl
+    from: "2.24.0"
+
 targets:
   MailBackup:
     type: application
     platform: macOS
     sources:
       - path: Sources/MailBackup
+    dependencies:
+      - package: swift-nio-imap
+        product: NIOIMAP
+      - package: swift-nio
+        product: NIOCore
+      - package: swift-nio
+        product: NIOPosix
+      - package: swift-nio-ssl
+        product: NIOSSL
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moerdowo.MailBackup

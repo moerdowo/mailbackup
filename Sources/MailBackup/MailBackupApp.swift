@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct MailBackupApp: App {
+    init() {
+        IMAPProbe.runHeadlessIfRequested()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
