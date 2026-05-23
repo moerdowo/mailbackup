@@ -40,6 +40,13 @@ enum ExportSelfTest {
         guard zipData.count > 4, Array(zipData.prefix(2)) == [0x50, 0x4B] else {
             throw err("zip missing PK signature (size=\(zipData.count))")
         }
+
+        // Maildir export.
+        let maildir = workspace.appendingPathComponent("maildir", isDirectory: true)
+        try Exporter.writeMaildir(messages: [message], store: store, into: maildir)
+        let cur = maildir.appendingPathComponent("cur", isDirectory: true)
+        let curFiles = (try? FileManager.default.contentsOfDirectory(atPath: cur.path)) ?? []
+        guard curFiles.count == 1 else { throw err("maildir cur has \(curFiles.count) files, expected 1") }
     }
 
     private static func err(_ message: String) -> Error {

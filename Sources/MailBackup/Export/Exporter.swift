@@ -29,6 +29,24 @@ enum Exporter {
         try zipDirectory(payload, to: destination)
     }
 
+    /// Writes the given messages into a Maildir (`cur`/`new`/`tmp`) at `maildirURL`.
+    static func writeMaildir(messages: [Message], store: ArchiveStore, into maildirURL: URL) throws {
+        for sub in ["cur", "new", "tmp"] {
+            try FileManager.default.createDirectory(
+                at: maildirURL.appendingPathComponent(sub, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+        let cur = maildirURL.appendingPathComponent("cur", isDirectory: true)
+        let stamp = Int(Date().timeIntervalSince1970)
+        for (index, message) in messages.enumerated() {
+            guard let data = try? store.readEML(relativePath: message.emlPath) else { continue }
+            let seen = (message.flags ?? "").contains("Seen")
+            let name = "\(stamp).\(index)_\(message.uid).mailbackup:2,\(seen ? "S" : "")"
+            try? data.write(to: cur.appendingPathComponent(name), options: .atomic)
+        }
+    }
+
     static func filename(for message: Message) -> String {
         let subjectPart = sanitize(String((message.subject ?? "message").prefix(60)))
         let base = subjectPart.isEmpty ? "message" : subjectPart

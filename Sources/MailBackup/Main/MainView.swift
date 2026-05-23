@@ -85,9 +85,19 @@ private struct MainContent: View {
                 Menu {
                     Button("Export Selected Message…") { exportMessage() }
                         .disabled(model.selectedMessage == nil)
-                    Button("Export Folder…") { exportFolder() }
+                    Button("Export Selected Message as PDF…") { exportMessagePDF() }
+                        .disabled(model.selectedMessage == nil)
+                    Button("Print Selected Message…") { printMessage() }
+                        .disabled(model.selectedMessage == nil)
+                    Divider()
+                    Button("Export Folder (Zip)…") { exportFolder() }
                         .disabled(model.selectedFolderId == nil)
-                    Button("Export Account…") { exportAccount() }
+                    Button("Export Folder (Maildir)…") { exportFolderMaildir() }
+                        .disabled(model.selectedFolderId == nil)
+                    Divider()
+                    Button("Export Account (Zip)…") { exportAccount() }
+                        .disabled(model.currentAccount() == nil)
+                    Button("Export Account (Maildir)…") { exportAccountMaildir() }
                         .disabled(model.currentAccount() == nil)
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
@@ -118,10 +128,39 @@ private struct MainContent: View {
         }
     }
 
+    private func exportMessagePDF() {
+        guard let message = model.selectedMessage, let content = model.loadContent(for: message) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(sanitizeName(String((message.subject ?? "message").prefix(60)))).pdf"
+        panel.allowedContentTypes = [.pdf]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        MessagePrinter.exportPDF(message: message, content: content, to: url)
+    }
+
+    private func printMessage() {
+        guard let message = model.selectedMessage, let content = model.loadContent(for: message) else { return }
+        MessagePrinter.printMessage(message: message, content: content)
+    }
+
     private func exportFolder() {
         guard let folderName = model.selectedFolderName() else { return }
         let safe = sanitizeName(folderName)
         presentZipPanel(suggested: "\(safe).zip", folderName: safe, messages: model.currentFolderMessages())
+    }
+
+    private func exportFolderMaildir() {
+        guard let folderName = model.selectedFolderName() else { return }
+        presentMaildirPanel(suggested: sanitizeName(folderName), folders: [(sanitizeName(folderName), model.currentFolderMessages())])
+    }
+
+    private func exportAccountMaildir() {
+        guard let account = model.currentAccount() else { return }
+        let folders = ((try? app.repository.folders(accountId: account.id)) ?? []).compactMap { folder -> (String, [Message])? in
+            guard let id = folder.id else { return nil }
+            let messages = (try? app.repository.messages(folderId: id, limit: 1_000_000)) ?? []
+            return (sanitizeName(folder.name), messages)
+        }
+        presentMaildirPanel(suggested: sanitizeName(account.displayName), folders: folders)
     }
 
     private func exportAccount() {
@@ -146,6 +185,41 @@ private struct MainContent: View {
         Task.detached {
             do {
                 try Exporter.zip(messages: messages, store: store, folderName: folderName, to: url)
+                await MainActor.run { model.exportStatus = nil }
+            } catch {
+                await MainActor.run {
+                    model.errorMessage = error.localizedDescription
+                    model.exportStatus = nil
+                }
+            }
+        }
+    }
+
+    private func presentMaildirPanel(suggested: String, folders: [(name: String, messages: [Message])]) {
+        let nonEmpty = folders.filter { !$0.messages.isEmpty }
+        guard !nonEmpty.isEmpty else {
+            model.errorMessage = "Nothing to export."
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggested
+        panel.canCreateDirectories = true
+        panel.message = "Choose where to create the Maildir"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let store = model.app.archiveStore
+        model.exportStatus = "Exporting Maildir…"
+        Task.detached {
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                if nonEmpty.count == 1 {
+                    try Exporter.writeMaildir(messages: nonEmpty[0].messages, store: store, into: url)
+                } else {
+                    for folder in nonEmpty {
+                        let sub = url.appendingPathComponent(folder.name, isDirectory: true)
+                        try Exporter.writeMaildir(messages: folder.messages, store: store, into: sub)
+                    }
+                }
                 await MainActor.run { model.exportStatus = nil }
             } catch {
                 await MainActor.run {
