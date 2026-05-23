@@ -7,6 +7,12 @@ struct MessageContent {
     var attachments: [MIMEMessage.Attachment]
 }
 
+/// What the sidebar has selected: the dashboard overview or a specific folder.
+enum SidebarItem: Hashable {
+    case dashboard
+    case folder(Int64)
+}
+
 @MainActor
 @Observable
 final class MainModel {
@@ -23,11 +29,17 @@ final class MainModel {
         let account: Account
         var folders: [FolderNode]
         let total: Int
+        let storageBytes: Int
+        let lastSyncedAt: Date?
         var id: String { account.id }
     }
 
     var accountNodes: [AccountNode] = []
-    var selectedFolderId: Int64?
+    var selection: SidebarItem? = .dashboard
+    var selectedFolderId: Int64? {
+        if case .folder(let id) = selection { return id }
+        return nil
+    }
     var messages: [Message] = []
     var selectedMessageId: Int64?
     var searchText = ""
@@ -49,14 +61,17 @@ final class MainModel {
                 return FolderNode(folder: folder, count: count)
             }
             let total = (try? app.repository.messageCount(accountId: account.id)) ?? 0
-            nodes.append(AccountNode(account: account, folders: folderNodes, total: total))
+            let storage = (try? app.repository.totalArchivedSize(accountId: account.id)) ?? 0
+            let lastSynced = folderNodes.compactMap { $0.folder.lastSyncedAt }.max()
+            nodes.append(AccountNode(account: account, folders: folderNodes, total: total, storageBytes: storage, lastSyncedAt: lastSynced))
         }
         accountNodes = nodes
-        if selectedFolderId == nil {
-            selectedFolderId = nodes.first?.folders.first?.id
-        }
         refreshMessages()
     }
+
+    var totalMessages: Int { accountNodes.reduce(0) { $0 + $1.total } }
+    var totalStorageBytes: Int { accountNodes.reduce(0) { $0 + $1.storageBytes } }
+    var totalFolders: Int { accountNodes.reduce(0) { $0 + $1.folders.count } }
 
     func refreshMessages() {
         guard let folderId = selectedFolderId else {

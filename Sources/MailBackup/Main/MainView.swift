@@ -27,13 +27,9 @@ private struct MainContent: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .frame(minWidth: 220)
-        } content: {
-            messageList
-                .frame(minWidth: 300)
+                .frame(minWidth: 240)
         } detail: {
-            MessageDetailView(model: model)
-                .frame(minWidth: 420)
+            rightArea
         }
         .onChange(of: app.dataRevision) { _, _ in model.reloadSidebar() }
         .toolbar {
@@ -134,12 +130,29 @@ private struct MainContent: View {
         return cleaned.isEmpty ? "Export" : cleaned
     }
 
+    @ViewBuilder
+    private var rightArea: some View {
+        switch model.selection {
+        case .folder:
+            HSplitView {
+                messageList
+                    .frame(minWidth: 280, idealWidth: 340)
+                MessageDetailView(model: model)
+                    .frame(minWidth: 420)
+            }
+        default:
+            DashboardView(model: model, onAddAccount: onAddAccount)
+        }
+    }
+
     private var sidebar: some View {
-        List(selection: $model.selectedFolderId) {
+        List(selection: $model.selection) {
             if let error = model.errorMessage ?? app.syncError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red).font(.caption)
             }
+            Label("Dashboard", systemImage: "square.grid.2x2")
+                .tag(SidebarItem.dashboard)
             ForEach(model.accountNodes) { node in
                 Section {
                     ForEach(node.folders) { folder in
@@ -150,7 +163,7 @@ private struct MainContent: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
-                        .tag(folder.id)
+                        .tag(SidebarItem.folder(folder.id))
                     }
                 } header: {
                     Text(node.account.displayName)
@@ -158,7 +171,7 @@ private struct MainContent: View {
             }
         }
         .listStyle(.sidebar)
-        .onChange(of: model.selectedFolderId) { _, _ in model.refreshMessages() }
+        .onChange(of: model.selection) { _, _ in model.refreshMessages() }
     }
 
     private var messageList: some View {

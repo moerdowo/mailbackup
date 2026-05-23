@@ -101,6 +101,12 @@ final class AppModel {
         startSync(jobs)
     }
 
+    /// Syncs a single account using its archived folders.
+    func syncAccount(_ account: Account) {
+        let names = ((try? repository.folders(accountId: account.id)) ?? []).map(\.name)
+        startSync([SyncJob(account: account, folderNames: names)])
+    }
+
     /// Starts a background sync for the given jobs. No-op if one is running.
     func startSync(_ jobs: [SyncJob]) {
         guard !isSyncing, !jobs.isEmpty else { return }
