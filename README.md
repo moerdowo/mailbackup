@@ -25,15 +25,27 @@ on your Mac — nothing is sent anywhere else.
 - **Export** — a single message as `.eml`, or a folder/account as a zipped EML archive.
 - **Privacy first** — credentials are stored in the macOS **Keychain**, never on disk in plaintext.
 
-## Requirements
+## Install
 
-- macOS 14 or later (the app targets macOS 14; built and tested with the macOS 26 SDK).
-- [Xcode](https://developer.apple.com/xcode/) 16+ (developed against Xcode 26 / Swift 6.3).
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to generate the project: `brew install xcodegen`.
+Download the latest **`MailBackup-x.y.z.dmg`** from the [Releases page](https://github.com/moerdowo/mailbackup/releases/latest), open it, and drag **MailBackup** into your **Applications** folder. Requires macOS 14 or later (Apple Silicon).
 
-## Build & run
+### Opening a non-notarized build
 
-The Xcode project is generated from [`project.yml`](project.yml) and is not checked in.
+These builds are **not notarized** (not signed with an Apple Developer certificate), so macOS Gatekeeper blocks them on first launch with a message like *"MailBackup can't be opened because Apple cannot check it for malicious software."* This is expected — open it once using any of these, and macOS remembers the choice:
+
+- **Right-click** (or Control-click) **MailBackup.app → Open**, then click **Open** in the dialog.
+- On **macOS 15 (Sequoia)** the right-click option may not appear. Try to open the app, then go to  **System Settings → Privacy & Security**, scroll to the Security section, and click **Open Anyway**.
+- Or, from Terminal, clear the quarantine flag:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/MailBackup.app
+  ```
+
+> Prefer to verify the code yourself? Build from source (below) instead.
+
+## Build from source
+
+Requires [Xcode](https://developer.apple.com/xcode/) 16+ (developed against Xcode 26 / Swift 6.3) and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The Xcode project is generated from [`project.yml`](project.yml) and is not checked in.
 
 ```bash
 brew install xcodegen          # once
