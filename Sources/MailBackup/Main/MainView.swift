@@ -73,6 +73,10 @@ private struct MainContent: View {
                         Divider()
                         Toggle("Unread only", isOn: $model.filter.unreadOnly)
                         Toggle("With attachments", isOn: $model.filter.hasAttachmentOnly)
+                        if model.selection != .search {
+                            Divider()
+                            Toggle("Group by conversation", isOn: $model.threaded)
+                        }
                     } label: {
                         Label("Sort & Filter", systemImage: model.filter.isActive
                               ? "line.3.horizontal.decrease.circle.fill"
@@ -305,8 +309,24 @@ private struct MainContent: View {
 
     private var messageList: some View {
         List(selection: $model.selectedMessageId) {
-            ForEach(model.messages) { message in
-                MessageRow(message: message).tag(message.id)
+            if model.threaded {
+                ForEach(model.threads) { thread in
+                    if thread.count <= 1, let message = thread.representative {
+                        MessageRow(message: message).tag(message.id)
+                    } else {
+                        DisclosureGroup {
+                            ForEach(thread.messages) { message in
+                                MessageRow(message: message).tag(message.id)
+                            }
+                        } label: {
+                            ThreadHeaderRow(thread: thread)
+                        }
+                    }
+                }
+            } else {
+                ForEach(model.messages) { message in
+                    MessageRow(message: message).tag(message.id)
+                }
             }
             if model.hasMoreMessages {
                 PagingFooter().onAppear { model.loadMore() }
@@ -337,6 +357,31 @@ struct PagingFooter: View {
         }
         .padding(.vertical, 6)
         .listRowSeparator(.hidden)
+    }
+}
+
+struct ThreadHeaderRow: View {
+    let thread: MainModel.MessageThread
+
+    var body: some View {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(thread.subject.isEmpty ? "(no subject)" : thread.subject)
+                    .font(.callout.weight(.semibold)).lineLimit(1)
+                if let latest = thread.representative,
+                   let date = latest.internalDate ?? latest.date {
+                    Text(date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Text("\(thread.count)")
+                .font(.caption.monospacedDigit())
+                .padding(.horizontal, 7).padding(.vertical, 1)
+                .background(.secondary.opacity(0.18), in: Capsule())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
     }
 }
 

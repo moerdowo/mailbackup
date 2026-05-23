@@ -48,6 +48,7 @@ final class MainModel {
     var selectedMessageId: Int64?
     var searchText = ""
     var filter = MessageFilter()
+    var threaded = false
     var errorMessage: String?
     var exportStatus: String?
 
@@ -144,6 +145,43 @@ final class MainModel {
             errorMessage = error.localizedDescription
             hasMoreMessages = false
         }
+    }
+
+    struct MessageThread: Identifiable {
+        let id: String
+        let subject: String
+        let messages: [Message]
+        var representative: Message? { messages.first }
+        var count: Int { messages.count }
+    }
+
+    /// Groups the loaded messages into threads by normalized subject.
+    var threads: [MessageThread] {
+        var grouped: [String: [Message]] = [:]
+        var order: [String] = []
+        for message in messages {
+            let key = MainModel.normalizedSubject(message.subject)
+            if grouped[key] == nil { order.append(key) }
+            grouped[key, default: []].append(message)
+        }
+        return order.map { key in
+            let msgs = grouped[key] ?? []
+            return MessageThread(id: key, subject: msgs.first?.subject ?? "(no subject)", messages: msgs)
+        }
+    }
+
+    static func normalizedSubject(_ subject: String?) -> String {
+        var text = (subject ?? "").lowercased().trimmingCharacters(in: .whitespaces)
+        let prefixes = ["re:", "fwd:", "fw:", "aw:", "antw:"]
+        var changed = true
+        while changed {
+            changed = false
+            for prefix in prefixes where text.hasPrefix(prefix) {
+                text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                changed = true
+            }
+        }
+        return text.isEmpty ? "(no subject)" : text
     }
 
     /// "Account · Folder" label for a message, used in global search results.
