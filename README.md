@@ -4,6 +4,10 @@
   <p><strong>Archive and back up your email locally over IMAP — a native macOS app.</strong></p>
 </div>
 
+<p align="center">
+  <img src="docs/dashboard.png" width="860" alt="MailBackup dashboard">
+</p>
+
 MailBackup connects to your IMAP accounts and keeps a local, offline copy of your
 mail as standard `.eml` files, indexed for fast full-text search. Everything stays
 on your Mac — nothing is sent anywhere else.
