@@ -22,6 +22,7 @@ on your Mac — nothing is sent anywhere else.
 - **Reading** — three-pane UI with an HTML message viewer that **blocks all remote content** (no tracking pixels), a Rich/Plain toggle, and savable attachments.
 - **Dashboard** — sync status, summary stats (accounts, messages, folders, storage), and per-account controls.
 - **Jobs & Log** — a live view of sync runs and a persistent activity log.
+- **Menu bar** — a menu-bar item mirrors the dashboard (sync status, stats, quick sync/pause) and shows a sync icon while syncing; can be turned off in Settings.
 - **Export** — a single message as `.eml`, or a folder/account as a zipped EML archive.
 - **Privacy first** — credentials are stored in the macOS **Keychain**, never on disk in plaintext.
 
