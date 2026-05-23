@@ -6,6 +6,7 @@ struct MailBackupApp: App {
         IMAPProbe.runHeadlessIfRequested()
         IMAPClientSelfTest.runHeadlessIfRequested()
         StorageSelfTest.runHeadlessIfRequested()
+        MIMESelfTest.runHeadlessIfRequested()
     }
 
     var body: some Scene {
