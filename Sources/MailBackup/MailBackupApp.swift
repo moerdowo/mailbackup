@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct MailBackupApp: App {
+    @State private var app = AppModel()
+
     init() {
         IMAPProbe.runHeadlessIfRequested()
         IMAPClientSelfTest.runHeadlessIfRequested()
@@ -11,14 +13,10 @@ struct MailBackupApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(app)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.titleBar)
-        .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button("About MailBackup") {}
-            }
-        }
     }
 }
