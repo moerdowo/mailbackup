@@ -70,6 +70,7 @@ final class AppModel {
         self.syncEngine = SyncEngine(repository: repository, archiveStore: store)
         self.accounts = (try? repository.allAccounts()) ?? []
         startScheduler()
+        Notifier.requestAuthorization()
     }
 
     static let archiveRootKey = "archiveRoot"
@@ -237,6 +238,8 @@ final class AppModel {
     }
 
     private func runSync(_ syncJobs: [SyncJob], recordIDs: [UUID]) async {
+        var totalArchived = 0
+        var failures = 0
         defer {
             isSyncing = false
             syncProgress = nil
@@ -244,6 +247,13 @@ final class AppModel {
             reloadAccounts()
             dataRevision &+= 1
             syncTask = nil
+            if failures > 0 {
+                Notifier.notify(title: "Sync finished with errors",
+                                body: "\(totalArchived) new message\(totalArchived == 1 ? "" : "s") archived; \(failures) account\(failures == 1 ? "" : "s") failed.")
+            } else if totalArchived > 0 {
+                Notifier.notify(title: "Archive updated",
+                                body: "\(totalArchived) new message\(totalArchived == 1 ? "" : "s") archived.")
+            }
         }
 
         for (index, job) in syncJobs.enumerated() {
@@ -255,6 +265,7 @@ final class AppModel {
             guard let password = password(for: job.account) else {
                 let message = "No saved password for \(job.account.email)."
                 syncError = message
+                failures += 1
                 updateJob(recordID) { $0.status = .failed; $0.error = message; $0.finishedAt = Date() }
                 activityLog.log(message, category: "Sync", level: .error)
                 continue
@@ -277,6 +288,7 @@ final class AppModel {
                 }
                 let after = (try? repository.messageCount(accountId: job.account.id)) ?? before
                 let archived = max(0, after - before)
+                totalArchived += archived
                 updateJob(recordID) {
                     $0.status = .completed
                     $0.finishedAt = Date()
@@ -290,6 +302,7 @@ final class AppModel {
                 activityLog.log("Sync cancelled for \(job.account.email)", category: "Sync", level: .warning)
             } catch {
                 syncError = "Sync failed for \(job.account.email): \(error.localizedDescription)"
+                failures += 1
                 updateJob(recordID) { $0.status = .failed; $0.error = error.localizedDescription; $0.finishedAt = Date(); $0.progress = nil }
                 activityLog.log("Sync failed for \(job.account.email): \(error.localizedDescription)", category: "Sync", level: .error)
             }

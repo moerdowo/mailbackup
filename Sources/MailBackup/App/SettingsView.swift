@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage(AppSettings.menuBarEnabledKey) private var menuBarEnabled = true
+    @AppStorage(AppSettings.notificationsEnabledKey) private var notificationsEnabled = true
 
     var body: some View {
         Form {
@@ -12,12 +13,19 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Notify when syncing finishes or fails", isOn: $notificationsEnabled)
+                    .onChange(of: notificationsEnabled) { _, on in
+                        if on { Notifier.requestAuthorization() }
+                    }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 180)
+        .frame(width: 440, height: 220)
     }
 }
 
 enum AppSettings {
     static let menuBarEnabledKey = "menuBarEnabled"
+    static let notificationsEnabledKey = "notificationsEnabled"
 }
