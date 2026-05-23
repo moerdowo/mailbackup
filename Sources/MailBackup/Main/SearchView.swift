@@ -48,7 +48,9 @@ struct SearchView: View {
             .padding(.vertical, 7)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
 
-            if hasQuery {
+            if model.isSearching {
+                ProgressView().controlSize(.small)
+            } else if hasQuery {
                 Text("\(model.searchTotal) result\(model.searchTotal == 1 ? "" : "s")")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -81,6 +83,12 @@ struct SearchView: View {
             ContentUnavailableView("Search your archive",
                                    systemImage: "magnifyingglass",
                                    description: Text("Find mail across all of your accounts."))
+        } else if model.messages.isEmpty && model.isSearching {
+            VStack(spacing: 8) {
+                ProgressView()
+                Text("Searching…").foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.messages.isEmpty {
             ContentUnavailableView.search(text: model.searchText)
         } else {

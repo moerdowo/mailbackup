@@ -63,7 +63,9 @@ final class MainModel {
     let pageSize = 100
     var hasMoreMessages = false
     var searchTotal = 0
+    var isSearching = false
     private var isLoadingPage = false
+    private var searchTask: Task<Void, Never>?
     var isViewingFirstPage: Bool { messages.count <= pageSize }
 
     init(app: AppModel) {
@@ -93,26 +95,65 @@ final class MainModel {
     var totalStorageBytes: Int { accountNodes.reduce(0) { $0 + $1.storageBytes } }
     var totalFolders: Int { accountNodes.reduce(0) { $0 + $1.folders.count } }
 
-    /// Loads the first page for the current selection/query, resetting paging.
+    /// Refreshes the message list. Folder browsing is synchronous (indexed,
+    /// fast); search is debounced and runs off the main thread so typing never
+    /// blocks the UI.
     func refreshMessages() {
+        searchTask?.cancel()
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        do {
-            switch selection {
-            case .search, .savedSearch:
-                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, filter: filter, limit: pageSize, offset: 0)
-                searchTotal = trimmed.isEmpty ? 0 : (try? app.repository.searchMessageCount(query: trimmed, filter: filter)) ?? messages.count
-            case .folder(let id):
-                if trimmed.isEmpty {
-                    messages = try app.repository.messages(folderId: id, filter: filter, limit: pageSize, offset: 0)
-                    searchTotal = 0
-                } else {
-                    messages = try app.repository.searchMessages(query: trimmed, folderId: id, filter: filter, limit: pageSize, offset: 0)
-                    searchTotal = (try? app.repository.searchMessageCount(query: trimmed, folderId: id, filter: filter)) ?? messages.count
-                }
-            default:
-                messages = []
-                searchTotal = 0
+
+        // Folder browsing with no query: synchronous and fast.
+        if !isSearchMode, trimmed.isEmpty, case .folder(let id) = selection {
+            isSearching = false
+            loadFolderFirstPage(folderId: id)
+            return
+        }
+
+        // Need at least 2 characters to run a search (1-char prefix scans are
+        // pathologically broad).
+        guard trimmed.count >= 2 else {
+            isSearching = false
+            messages = []
+            searchTotal = 0
+            hasMoreMessages = false
+            return
+        }
+
+        let scope: Int64? = { if case .folder(let id) = selection { return id }; return nil }()
+        let currentFilter = filter
+        let size = pageSize
+        let repository = app.repository
+        isSearching = true
+
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 220_000_000)  // debounce
+            guard !Task.isCancelled, let self else { return }
+
+            let results = (try? await Task.detached(priority: .userInitiated) {
+                try repository.searchMessages(query: trimmed, folderId: scope, filter: currentFilter, limit: size, offset: 0)
+            }.value) ?? []
+            guard !Task.isCancelled else { return }
+
+            self.messages = results
+            self.hasMoreMessages = results.count == size
+            self.isSearching = false
+            if !results.contains(where: { $0.id == self.selectedMessageId }) {
+                self.selectedMessageId = results.first?.id
             }
+
+            // The count can be slower than the first page; update it separately.
+            let count = (try? await Task.detached(priority: .utility) {
+                try repository.searchMessageCount(query: trimmed, folderId: scope, filter: currentFilter)
+            }.value) ?? results.count
+            guard !Task.isCancelled else { return }
+            self.searchTotal = count
+        }
+    }
+
+    private func loadFolderFirstPage(folderId: Int64) {
+        do {
+            messages = try app.repository.messages(folderId: folderId, filter: filter, limit: pageSize, offset: 0)
+            searchTotal = 0
             hasMoreMessages = messages.count == pageSize
             if !messages.contains(where: { $0.id == selectedMessageId }) {
                 selectedMessageId = messages.first?.id
