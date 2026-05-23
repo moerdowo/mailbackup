@@ -142,6 +142,10 @@ private struct MainContent: View {
             }
         case .search:
             SearchView(model: model)
+        case .jobs:
+            JobsView()
+        case .log:
+            LogView()
         default:
             DashboardView(model: model, onAddAccount: onAddAccount)
         }
@@ -157,6 +161,10 @@ private struct MainContent: View {
                 .tag(SidebarItem.dashboard)
             Label("Search", systemImage: "magnifyingglass")
                 .tag(SidebarItem.search)
+            Label("Jobs", systemImage: "arrow.triangle.2.circlepath")
+                .tag(SidebarItem.jobs)
+            Label("Log", systemImage: "list.bullet.rectangle")
+                .tag(SidebarItem.log)
             ForEach(model.accountNodes) { node in
                 Section {
                     ForEach(node.folders) { folder in

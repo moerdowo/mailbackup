@@ -26,6 +26,13 @@ final class AppModel {
     private var syncTask: Task<Void, Never>?
     private var lastRevisionBump = Date.distantPast
 
+    /// Sync run records (newest first), shown in the Jobs view.
+    private(set) var jobs: [SyncJobRecord] = []
+    private let maxJobs = 200
+
+    /// Persistent activity log, shown in the Log view.
+    let activityLog = ActivityLog()
+
     let database: Database
     let repository: Repository
     private(set) var archiveRoot: URL
@@ -77,13 +84,20 @@ final class AppModel {
     func addAccount(_ account: Account, password: String) throws {
         try Keychain.setPassword(password, account: account.id)
         try repository.saveAccount(account)
+        activityLog.log("Added account \(account.email)", category: "Account")
         reloadAccounts()
     }
 
     func deleteAccount(_ account: Account) {
         try? repository.deleteAccount(id: account.id)
         try? Keychain.deletePassword(account: account.id)
+        // Remove the account's on-disk archive (root/<accountId>/...).
+        let directory = archiveStore.root.appendingPathComponent(account.id, isDirectory: true)
+        try? FileManager.default.removeItem(at: directory)
+        jobs.removeAll { $0.accountEmail == account.email }
+        activityLog.log("Removed account \(account.email) and its local archive", category: "Account", level: .warning)
         reloadAccounts()
+        dataRevision &+= 1
     }
 
     func password(for account: Account) -> String? {
@@ -108,13 +122,21 @@ final class AppModel {
     }
 
     /// Starts a background sync for the given jobs. No-op if one is running.
-    func startSync(_ jobs: [SyncJob]) {
-        guard !isSyncing, !jobs.isEmpty else { return }
+    func startSync(_ syncJobs: [SyncJob]) {
+        guard !isSyncing, !syncJobs.isEmpty else { return }
         isSyncing = true
         syncError = nil
         syncProgress = nil
+
+        let records = syncJobs.map {
+            SyncJobRecord(accountEmail: $0.account.email, folderNames: $0.folderNames)
+        }
+        jobs.insert(contentsOf: records, at: 0)
+        if jobs.count > maxJobs { jobs.removeLast(jobs.count - maxJobs) }
+
+        let ids = records.map(\.id)
         syncTask = Task { [weak self] in
-            await self?.runSync(jobs)
+            await self?.runSync(syncJobs, recordIDs: ids)
         }
     }
 
@@ -122,7 +144,11 @@ final class AppModel {
         syncTask?.cancel()
     }
 
-    private func runSync(_ jobs: [SyncJob]) async {
+    func clearFinishedJobs() {
+        jobs.removeAll { $0.status != .running && $0.status != .queued }
+    }
+
+    private func runSync(_ syncJobs: [SyncJob], recordIDs: [UUID]) async {
         defer {
             isSyncing = false
             syncProgress = nil
@@ -132,12 +158,24 @@ final class AppModel {
             syncTask = nil
         }
 
-        for job in jobs {
-            if Task.isCancelled { break }
-            guard let password = password(for: job.account) else {
-                syncError = "No saved password for \(job.account.email)."
+        for (index, job) in syncJobs.enumerated() {
+            let recordID = recordIDs[index]
+            if Task.isCancelled {
+                updateJob(recordID) { $0.status = .cancelled; $0.finishedAt = Date() }
                 continue
             }
+            guard let password = password(for: job.account) else {
+                let message = "No saved password for \(job.account.email)."
+                syncError = message
+                updateJob(recordID) { $0.status = .failed; $0.error = message; $0.finishedAt = Date() }
+                activityLog.log(message, category: "Sync", level: .error)
+                continue
+            }
+
+            let before = (try? repository.messageCount(accountId: job.account.id)) ?? 0
+            updateJob(recordID) { $0.status = .running; $0.startedAt = Date() }
+            activityLog.log("Sync started for \(job.account.email)", category: "Sync")
+
             do {
                 try await syncEngine.sync(
                     account: job.account,
@@ -146,14 +184,33 @@ final class AppModel {
                 ) { [weak self] progress in
                     Task { @MainActor in
                         self?.noteProgress(progress, account: job.account)
+                        self?.updateJob(recordID) { $0.progress = progress }
                     }
                 }
+                let after = (try? repository.messageCount(accountId: job.account.id)) ?? before
+                let archived = max(0, after - before)
+                updateJob(recordID) {
+                    $0.status = .completed
+                    $0.finishedAt = Date()
+                    $0.messagesArchived = archived
+                    $0.progress = nil
+                }
+                activityLog.log("Synced \(job.account.email): \(archived) new message\(archived == 1 ? "" : "s")", category: "Sync")
             } catch is CancellationError {
                 syncError = "Sync was cancelled."
+                updateJob(recordID) { $0.status = .cancelled; $0.finishedAt = Date(); $0.progress = nil }
+                activityLog.log("Sync cancelled for \(job.account.email)", category: "Sync", level: .warning)
             } catch {
                 syncError = "Sync failed for \(job.account.email): \(error.localizedDescription)"
+                updateJob(recordID) { $0.status = .failed; $0.error = error.localizedDescription; $0.finishedAt = Date(); $0.progress = nil }
+                activityLog.log("Sync failed for \(job.account.email): \(error.localizedDescription)", category: "Sync", level: .error)
             }
         }
+    }
+
+    private func updateJob(_ id: UUID, _ mutate: (inout SyncJobRecord) -> Void) {
+        guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&jobs[index])
     }
 
     private func noteProgress(_ progress: SyncProgress, account: Account) {

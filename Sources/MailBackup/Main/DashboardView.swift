@@ -150,6 +150,7 @@ private struct AccountCard: View {
     @Environment(AppModel.self) private var app
     let node: MainModel.AccountNode
     let byteString: (Int) -> String
+    @State private var confirmingDelete = false
 
     var body: some View {
         GroupBox {
@@ -177,8 +178,32 @@ private struct AccountCard: View {
                     Label("Sync", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(app.isSyncing)
+
+                Menu {
+                    Button(role: .destructive) {
+                        confirmingDelete = true
+                    } label: {
+                        Label("Remove Account…", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 28)
             }
             .padding(6)
+        }
+        .confirmationDialog(
+            "Remove \(node.account.email)?",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Account and Local Archive", role: .destructive) {
+                app.deleteAccount(node.account)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes the account's saved password and its \(node.total) archived message\(node.total == 1 ? "" : "s") from this Mac. Mail on the server is not affected.")
         }
     }
 }

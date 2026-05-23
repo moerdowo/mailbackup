@@ -12,6 +12,8 @@ struct MessageContent {
 enum SidebarItem: Hashable {
     case dashboard
     case search
+    case jobs
+    case log
     case folder(Int64)
 }
 
