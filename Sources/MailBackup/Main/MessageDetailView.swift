@@ -55,9 +55,19 @@ struct MessageDetailView: View {
                     }
                 }
                 Spacer()
-                if let date = message.internalDate ?? message.date {
-                    Text(date.formatted(date: .long, time: .shortened))
-                        .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let date = message.internalDate ?? message.date {
+                        Text(date.formatted(date: .long, time: .shortened))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Button {
+                        QuickLook.preview(fileURL: model.app.archiveStore.url(forRelativePath: message.emlPath))
+                    } label: {
+                        Label("Quick Look", systemImage: "eye")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .help("Quick Look the original message")
                 }
             }
             if content?.html != nil {
@@ -120,7 +130,7 @@ private struct AttachmentBar: View {
             HStack(spacing: 10) {
                 ForEach(attachments) { attachment in
                     Button {
-                        save(attachment)
+                        QuickLook.preview(data: attachment.data, filename: attachment.filename ?? "attachment")
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "doc")
@@ -132,7 +142,13 @@ private struct AttachmentBar: View {
                         .padding(.horizontal, 8).padding(.vertical, 5)
                     }
                     .buttonStyle(.bordered)
-                    .help("Save \(attachment.filename ?? "attachment")")
+                    .help("Quick Look \(attachment.filename ?? "attachment")")
+                    .contextMenu {
+                        Button("Quick Look") {
+                            QuickLook.preview(data: attachment.data, filename: attachment.filename ?? "attachment")
+                        }
+                        Button("Save…") { save(attachment) }
+                    }
                 }
             }
             .padding(12)
