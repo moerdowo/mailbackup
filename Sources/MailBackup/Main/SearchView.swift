@@ -4,50 +4,67 @@ struct SearchView: View {
     @Bindable var model: MainModel
     @FocusState private var searchFocused: Bool
 
-    var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                searchField
-                Divider()
-                results
-            }
-            .frame(minWidth: 300, idealWidth: 360)
+    private var hasQuery: Bool {
+        !model.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
-            MessageDetailView(model: model)
-                .frame(minWidth: 420)
+    var body: some View {
+        VStack(spacing: 0) {
+            searchBar
+            Divider()
+            HSplitView {
+                results
+                    .frame(minWidth: 300, idealWidth: 380)
+                MessageDetailView(model: model)
+                    .frame(minWidth: 420)
+            }
         }
         .onAppear { searchFocused = true }
     }
 
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search all archived mail", text: $model.searchText)
-                .textFieldStyle(.plain)
-                .focused($searchFocused)
-                .onChange(of: model.searchText) { _, _ in model.refreshMessages() }
-            if !model.searchText.isEmpty {
-                Button {
-                    model.searchText = ""
-                    model.refreshMessages()
-                } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search all archived mail", text: $model.searchText)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onChange(of: model.searchText) { _, _ in model.refreshMessages() }
+                if !model.searchText.isEmpty {
+                    Button {
+                        model.searchText = ""
+                        model.refreshMessages()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
                 }
-                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+
+            if hasQuery {
+                Text("\(model.messages.count) result\(model.messages.count == 1 ? "" : "s")")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
-        .padding(10)
+        .padding(12)
     }
 
     @ViewBuilder
     private var results: some View {
-        if model.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            ContentUnavailableView("Search your archive", systemImage: "magnifyingglass")
+        if !hasQuery {
+            ContentUnavailableView("Search your archive",
+                                   systemImage: "magnifyingglass",
+                                   description: Text("Find mail across all of your accounts."))
         } else if model.messages.isEmpty {
-            ContentUnavailableView("No matches", systemImage: "magnifyingglass")
+            ContentUnavailableView.search(text: model.searchText)
         } else {
             List(model.messages, selection: $model.selectedMessageId) { message in
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     MessageRow(message: message)
                     Text(model.contextLabel(for: message))
                         .font(.caption2)
