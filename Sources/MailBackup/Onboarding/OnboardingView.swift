@@ -109,11 +109,16 @@ private struct AccountStep: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Quick setup").font(.caption).foregroundStyle(.secondary)
-                HStack {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 8) {
                     ForEach(MailProvider.presets) { provider in
                         Button(provider.name) { model.applyPreset(provider) }
                             .buttonStyle(.bordered)
                     }
+                }
+                if let note = model.providerNote {
+                    Label(note, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

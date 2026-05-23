@@ -20,6 +20,10 @@ struct MailProvider: Identifiable, Hashable {
                      note: "Requires an app password."),
         MailProvider(name: "Yahoo", host: "imap.mail.yahoo.com", port: 993, security: .ssl,
                      note: "Requires an app password."),
+        MailProvider(name: "Purelymail", host: "imap.purelymail.com", port: 993, security: .ssl,
+                     note: "If Two-Factor Authentication is enabled, use an app password."),
+        MailProvider(name: "Other", host: "", port: 993, security: .ssl,
+                     note: "Enter your provider's IMAP server details manually."),
     ]
 }
 

@@ -23,6 +23,7 @@ final class OnboardingModel {
     var security: ConnectionSecurity = .ssl
     var username = ""
     var password = ""
+    var providerNote: String?
 
     // Connect + folder loading
     var isLoadingFolders = false
@@ -55,6 +56,7 @@ final class OnboardingModel {
         host = provider.host
         port = String(provider.port)
         security = provider.security
+        providerNote = provider.note
     }
 
     var draftAccount: Account {
