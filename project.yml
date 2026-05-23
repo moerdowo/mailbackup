@@ -1,0 +1,35 @@
+name: MailBackup
+options:
+  bundleIdPrefix: com.moerdowo
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    ENABLE_HARDENED_RUNTIME: "NO"
+
+targets:
+  MailBackup:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/MailBackup
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moerdowo.MailBackup
+        PRODUCT_NAME: MailBackup
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
+        INFOPLIST_KEY_NSPrincipalClass: "NSApplication"
+        COMBINE_HIDPI_IMAGES: "YES"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"

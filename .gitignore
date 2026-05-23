@@ -1,0 +1,23 @@
+# Xcode / xcodegen
+*.xcodeproj/
+*.xcworkspace/
+!default.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+.build/
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# SwiftPM
+Package.resolved
+
+# Misc
+*.swp
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
