@@ -14,9 +14,9 @@ struct SearchView: View {
             Divider()
             HSplitView {
                 results
-                    .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
+                    .frame(minWidth: 240, idealWidth: 340, maxHeight: .infinity)
                 MessageDetailView(model: model)
-                    .frame(minWidth: 420, maxHeight: .infinity)
+                    .frame(minWidth: 360, maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
         }

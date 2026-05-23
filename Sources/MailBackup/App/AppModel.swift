@@ -26,6 +26,11 @@ final class AppModel {
     private var syncTask: Task<Void, Never>?
     private var lastRevisionBump = Date.distantPast
 
+    /// Global pause: when true, no syncs run and any running sync is stopped.
+    private(set) var isPaused: Bool = UserDefaults.standard.bool(forKey: AppModel.pausedKey)
+    static let pausedKey = "syncPaused"
+    private var scheduleTimer: Timer?
+
     /// Sync run records (newest first), shown in the Jobs view.
     private(set) var jobs: [SyncJobRecord] = []
     private let maxJobs = 200
@@ -64,6 +69,7 @@ final class AppModel {
         self.archiveStore = store
         self.syncEngine = SyncEngine(repository: repository, archiveStore: store)
         self.accounts = (try? repository.allAccounts()) ?? []
+        startScheduler()
     }
 
     static let archiveRootKey = "archiveRoot"
@@ -100,15 +106,58 @@ final class AppModel {
         dataRevision &+= 1
     }
 
+    /// Updates an account's settings and, if a non-empty password is provided,
+    /// its stored credential.
+    func updateAccount(_ account: Account, newPassword: String?) {
+        try? repository.saveAccount(account)
+        if let newPassword, !newPassword.isEmpty {
+            try? Keychain.setPassword(newPassword, account: account.id)
+        }
+        activityLog.log("Updated settings for \(account.email)", category: "Account")
+        reloadAccounts()
+    }
+
+    func setAccountPaused(_ account: Account, paused: Bool) {
+        var updated = account
+        updated.isPaused = paused
+        try? repository.saveAccount(updated)
+        activityLog.log("\(paused ? "Paused" : "Resumed") syncing for \(account.email)", category: "Account")
+        reloadAccounts()
+    }
+
+    /// Reconciles the set of folders archived for an account: creates rows for
+    /// newly selected folders and deletes deselected ones (rows, messages, files).
+    func applyFolderSelection(account: Account, selectedNames: Set<String>) {
+        let existing = (try? repository.folders(accountId: account.id)) ?? []
+        let existingNames = Set(existing.map(\.name))
+
+        for folder in existing where !selectedNames.contains(folder.name) {
+            if let id = folder.id {
+                try? repository.deleteMessages(folderId: id)
+                try? repository.deleteFolder(id: id)
+            }
+            let directory = archiveStore.root
+                .appendingPathComponent(account.id, isDirectory: true)
+                .appendingPathComponent(ArchiveStore.sanitize(folder.name), isDirectory: true)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        for name in selectedNames where !existingNames.contains(name) {
+            _ = try? repository.upsertFolder(Folder(accountId: account.id, name: name))
+        }
+        activityLog.log("Updated archived folders for \(account.email)", category: "Account")
+        reloadAccounts()
+        dataRevision &+= 1
+    }
+
     func password(for account: Account) -> String? {
         try? Keychain.password(account: account.id)
     }
 
     // MARK: - Background sync
 
-    /// Syncs every account using its already-archived folders.
+    /// Syncs every (non-paused) account using its already-archived folders.
     func startSyncAllAccounts() {
-        let jobs = accounts.compactMap { account -> SyncJob? in
+        let jobs = accounts.filter { !$0.isPaused }.compactMap { account -> SyncJob? in
             let names = ((try? repository.folders(accountId: account.id)) ?? []).map(\.name)
             return names.isEmpty ? nil : SyncJob(account: account, folderNames: names)
         }
@@ -117,13 +166,52 @@ final class AppModel {
 
     /// Syncs a single account using its archived folders.
     func syncAccount(_ account: Account) {
+        guard !account.isPaused else { return }
         let names = ((try? repository.folders(accountId: account.id)) ?? []).map(\.name)
         startSync([SyncJob(account: account, folderNames: names)])
     }
 
-    /// Starts a background sync for the given jobs. No-op if one is running.
+    // MARK: - Pause
+
+    func setPaused(_ paused: Bool) {
+        isPaused = paused
+        UserDefaults.standard.set(paused, forKey: AppModel.pausedKey)
+        if paused {
+            cancelSync()
+            activityLog.log("Syncing paused", category: "Sync", level: .warning)
+        } else {
+            activityLog.log("Syncing resumed", category: "Sync")
+        }
+    }
+
+    // MARK: - Scheduler
+
+    private func startScheduler() {
+        scheduleTimer?.invalidate()
+        scheduleTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.runDueSyncs() }
+        }
+    }
+
+    /// Triggers syncs for accounts whose sync interval has elapsed.
+    private func runDueSyncs() {
+        guard !isPaused, !isSyncing else { return }
+        let now = Date()
+        let due = accounts.filter { !$0.isPaused }.compactMap { account -> SyncJob? in
+            guard let interval = account.syncIntervalMinutes else { return nil }
+            let folders = (try? repository.folders(accountId: account.id)) ?? []
+            guard !folders.isEmpty else { return nil }
+            let lastSynced = folders.compactMap(\.lastSyncedAt).max()
+            if let last = lastSynced, now.timeIntervalSince(last) < Double(interval) * 60 { return nil }
+            return SyncJob(account: account, folderNames: folders.map(\.name))
+        }
+        if !due.isEmpty { startSync(due) }
+    }
+
+    /// Starts a background sync for the given jobs. No-op if one is running or
+    /// syncing is globally paused.
     func startSync(_ syncJobs: [SyncJob]) {
-        guard !isSyncing, !syncJobs.isEmpty else { return }
+        guard !isPaused, !isSyncing, !syncJobs.isEmpty else { return }
         isSyncing = true
         syncError = nil
         syncProgress = nil

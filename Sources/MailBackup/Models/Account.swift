@@ -29,6 +29,7 @@ struct Account: Identifiable, Codable, Equatable {
     var downloadAttachments: Bool
     var syncIntervalMinutes: Int?  // nil = manual only
     var archivePath: String?       // nil = default archive root
+    var isPaused: Bool             // excluded from syncs while true
     var createdAt: Date
 
     init(
@@ -42,6 +43,7 @@ struct Account: Identifiable, Codable, Equatable {
         downloadAttachments: Bool = true,
         syncIntervalMinutes: Int? = nil,
         archivePath: String? = nil,
+        isPaused: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -54,6 +56,7 @@ struct Account: Identifiable, Codable, Equatable {
         self.downloadAttachments = downloadAttachments
         self.syncIntervalMinutes = syncIntervalMinutes
         self.archivePath = archivePath
+        self.isPaused = isPaused
         self.createdAt = createdAt
     }
 }

@@ -39,7 +39,12 @@ private struct MainContent: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                if app.isSyncing {
+                if app.isPaused {
+                    Button { app.setPaused(false) } label: {
+                        Label("Resume", systemImage: "play.circle")
+                    }
+                    .help("Resume syncing")
+                } else if app.isSyncing {
                     Button { app.cancelSync() } label: {
                         Label("Stop", systemImage: "stop.circle")
                     }

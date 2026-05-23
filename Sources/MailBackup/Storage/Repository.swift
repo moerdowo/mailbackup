@@ -54,6 +54,10 @@ struct Repository {
         }
     }
 
+    func deleteFolder(id: Int64) throws {
+        _ = try writer.write { try Folder.deleteOne($0, key: id) }
+    }
+
     func updateFolderState(id: Int64, uidValidity: Int?, uidNext: Int?, lastSyncedAt: Date) throws {
         try writer.write { db in
             try db.execute(

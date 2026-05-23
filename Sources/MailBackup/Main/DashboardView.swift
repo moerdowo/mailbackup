@@ -80,7 +80,12 @@ private struct SyncStatusCard: View {
         GroupBox {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    if app.isSyncing {
+                    if app.isPaused {
+                        Label("Syncing paused", systemImage: "pause.circle.fill")
+                            .font(.headline).foregroundStyle(.orange)
+                        Text("Automatic and manual syncs are paused.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    } else if app.isSyncing {
                         Label("Syncing…", systemImage: "arrow.triangle.2.circlepath")
                             .font(.headline)
                         if let progress = app.syncProgress {
@@ -106,6 +111,21 @@ private struct SyncStatusCard: View {
                     }
                 }
                 Spacer()
+                controls
+            }
+            .padding(6)
+        }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        if app.isPaused {
+            Button { app.setPaused(false) } label: {
+                Label("Resume", systemImage: "play.circle")
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            HStack(spacing: 8) {
                 if app.isSyncing {
                     Button(role: .destructive) { app.cancelSync() } label: {
                         Label("Stop", systemImage: "stop.circle")
@@ -117,8 +137,10 @@ private struct SyncStatusCard: View {
                     .disabled(model.accountNodes.isEmpty)
                     .keyboardShortcut("r", modifiers: .command)
                 }
+                Button { app.setPaused(true) } label: {
+                    Label("Pause", systemImage: "pause.circle")
+                }
             }
-            .padding(6)
         }
     }
 }
@@ -151,14 +173,26 @@ private struct AccountCard: View {
     let node: MainModel.AccountNode
     let byteString: (Int) -> String
     @State private var confirmingDelete = false
+    @State private var showingSettings = false
+
+    private var isPaused: Bool { node.account.isPaused }
 
     var body: some View {
         GroupBox {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(node.account.displayName).font(.headline)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(node.account.displayName).font(.headline)
+                        if isPaused {
+                            Text("Paused")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(.orange.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.orange)
+                        }
+                    }
                     Text(node.account.email).font(.callout).foregroundStyle(.secondary)
-                    HStack(spacing: 12) {
+                    FlowLayout(spacing: 12, lineSpacing: 4) {
                         Label("\(node.total)", systemImage: "envelope")
                         Label("\(node.folders.count)", systemImage: "folder")
                         Label(byteString(node.storageBytes), systemImage: "internaldrive")
@@ -171,15 +205,29 @@ private struct AccountCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 Button {
                     app.syncAccount(node.account)
                 } label: {
                     Label("Sync", systemImage: "arrow.triangle.2.circlepath")
                 }
-                .disabled(app.isSyncing)
+                .disabled(app.isSyncing || app.isPaused || isPaused)
+                .fixedSize()
 
                 Menu {
+                    Button { showingSettings = true } label: {
+                        Label("Settings…", systemImage: "gearshape")
+                    }
+                    if isPaused {
+                        Button { app.setAccountPaused(node.account, paused: false) } label: {
+                            Label("Resume Syncing", systemImage: "play")
+                        }
+                    } else {
+                        Button { app.setAccountPaused(node.account, paused: true) } label: {
+                            Label("Pause Syncing", systemImage: "pause")
+                        }
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {
@@ -189,9 +237,13 @@ private struct AccountCard: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton)
-                .frame(width: 28)
+                .fixedSize()
             }
             .padding(6)
+        }
+        .sheet(isPresented: $showingSettings) {
+            AccountSettingsView(account: node.account)
+                .environment(app)
         }
         .confirmationDialog(
             "Remove \(node.account.email)?",

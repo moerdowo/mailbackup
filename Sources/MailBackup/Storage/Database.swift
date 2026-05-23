@@ -99,6 +99,12 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v2-account-paused") { db in
+            try db.alter(table: "account") { t in
+                t.add(column: "isPaused", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }
