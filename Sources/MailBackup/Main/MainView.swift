@@ -37,6 +37,7 @@ private struct MainContent: View {
             // is at the top, so deep-paged scrolling isn't reset mid-sync.
             if model.isViewingFirstPage { model.refreshMessages() }
         }
+        .onChange(of: model.filter) { _, _ in model.refreshMessages() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if app.isPaused {
@@ -58,6 +59,27 @@ private struct MainContent: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 if app.isSyncing { ProgressView().controlSize(.small) }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                if showsMessageList {
+                    Menu {
+                        Picker("Sort", selection: $model.filter.sort) {
+                            Text(MessageSort.newest.label).tag(MessageSort.newest)
+                            Text(MessageSort.oldest.label).tag(MessageSort.oldest)
+                            if model.selection == .search {
+                                Text(MessageSort.relevance.label).tag(MessageSort.relevance)
+                            }
+                        }
+                        Divider()
+                        Toggle("Unread only", isOn: $model.filter.unreadOnly)
+                        Toggle("With attachments", isOn: $model.filter.hasAttachmentOnly)
+                    } label: {
+                        Label("Sort & Filter", systemImage: model.filter.isActive
+                              ? "line.3.horizontal.decrease.circle.fill"
+                              : "line.3.horizontal.decrease.circle")
+                    }
+                    .help("Sort and filter messages")
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -138,6 +160,13 @@ private struct MainContent: View {
         let invalid = CharacterSet(charactersIn: "/\\:*?\"<>|")
         let cleaned = name.components(separatedBy: invalid).joined(separator: "_")
         return cleaned.isEmpty ? "Export" : cleaned
+    }
+
+    private var showsMessageList: Bool {
+        switch model.selection {
+        case .folder, .search: return true
+        default: return false
+        }
     }
 
     @ViewBuilder

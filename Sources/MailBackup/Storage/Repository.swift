@@ -93,22 +93,40 @@ struct Repository {
         try writer.read { try Message.fetchOne($0, key: id) }
     }
 
-    /// A page of messages in a folder, newest first. Excludes the large
-    /// `bodyText` column for speed.
-    func messages(folderId: Int64, limit: Int = 2000, offset: Int = 0) throws -> [Message] {
+    /// A page of messages in a folder. Excludes the large `bodyText` column.
+    func messages(folderId: Int64, filter: MessageFilter = MessageFilter(), limit: Int = 2000, offset: Int = 0) throws -> [Message] {
         try writer.read { db in
-            try Message
-                .select(Message.listColumns)
-                .filter(Column("folderId") == folderId)
-                .order(sql: "COALESCE(internalDate, date, createdAt) DESC")
-                .limit(limit, offset: offset)
-                .fetchAll(db)
+            var request = Message.select(Message.listColumns).filter(Column("folderId") == folderId)
+            if filter.unreadOnly {
+                request = request.filter(sql: "(flags IS NULL OR flags NOT LIKE '%Seen%')")
+            }
+            if filter.hasAttachmentOnly {
+                request = request.filter(Column("hasAttachments") == true)
+            }
+            let order = filter.sort == .oldest
+                ? "COALESCE(internalDate, date, createdAt) ASC"
+                : "COALESCE(internalDate, date, createdAt) DESC"
+            return try request.order(sql: order).limit(limit, offset: offset).fetchAll(db)
+        }
+    }
+
+    /// Per-folder message counts for an account in a single grouped query.
+    func folderMessageCounts(accountId: String) throws -> [Int64: Int] {
+        try writer.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT folderId, COUNT(*) AS c FROM message WHERE accountId = ? GROUP BY folderId",
+                arguments: [accountId]
+            )
+            var result: [Int64: Int] = [:]
+            for row in rows { result[row["folderId"]] = row["c"] }
+            return result
         }
     }
 
     /// A page of full-text search results, optionally scoped to a folder or
     /// account. Ordered by FTS rank.
-    func searchMessages(query: String, folderId: Int64? = nil, accountId: String? = nil, limit: Int = 100, offset: Int = 0) throws -> [Message] {
+    func searchMessages(query: String, folderId: Int64? = nil, accountId: String? = nil, filter: MessageFilter = MessageFilter(), limit: Int = 100, offset: Int = 0) throws -> [Message] {
         let expression = Repository.ftsExpression(query)
         guard !expression.isEmpty else { return [] }
 
@@ -119,7 +137,13 @@ struct Repository {
         """
         var arguments: [DatabaseValueConvertible] = [expression]
         appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
-        sql += " ORDER BY rank LIMIT ? OFFSET ?"
+        appendFilter(filter, to: &sql)
+        switch filter.sort {
+        case .oldest: sql += " ORDER BY COALESCE(message.internalDate, message.date, message.createdAt) ASC"
+        case .newest: sql += " ORDER BY COALESCE(message.internalDate, message.date, message.createdAt) DESC"
+        case .relevance: sql += " ORDER BY rank"
+        }
+        sql += " LIMIT ? OFFSET ?"
         arguments.append(limit)
         arguments.append(offset)
 
@@ -129,7 +153,7 @@ struct Repository {
     }
 
     /// Total number of full-text matches for a query (for "N results").
-    func searchMessageCount(query: String, folderId: Int64? = nil, accountId: String? = nil) throws -> Int {
+    func searchMessageCount(query: String, folderId: Int64? = nil, accountId: String? = nil, filter: MessageFilter = MessageFilter()) throws -> Int {
         let expression = Repository.ftsExpression(query)
         guard !expression.isEmpty else { return 0 }
 
@@ -140,9 +164,19 @@ struct Repository {
         """
         var arguments: [DatabaseValueConvertible] = [expression]
         appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
+        appendFilter(filter, to: &sql)
 
         return try writer.read { db in
             try Int.fetchOne(db, sql: sql, arguments: StatementArguments(arguments)) ?? 0
+        }
+    }
+
+    private func appendFilter(_ filter: MessageFilter, to sql: inout String) {
+        if filter.unreadOnly {
+            sql += " AND (message.flags IS NULL OR message.flags NOT LIKE '%Seen%')"
+        }
+        if filter.hasAttachmentOnly {
+            sql += " AND message.hasAttachments = 1"
         }
     }
 

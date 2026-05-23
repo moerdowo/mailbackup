@@ -47,6 +47,7 @@ final class MainModel {
     var messages: [Message] = []
     var selectedMessageId: Int64?
     var searchText = ""
+    var filter = MessageFilter()
     var errorMessage: String?
     var exportStatus: String?
 
@@ -67,12 +68,12 @@ final class MainModel {
         var nodes: [AccountNode] = []
         for account in app.accounts {
             let folders = (try? app.repository.folders(accountId: account.id)) ?? []
+            let counts = (try? app.repository.folderMessageCounts(accountId: account.id)) ?? [:]
             let folderNodes = folders.compactMap { folder -> FolderNode? in
                 guard let id = folder.id else { return nil }
-                let count = (try? app.repository.messageCount(folderId: id)) ?? 0
-                return FolderNode(folder: folder, count: count)
+                return FolderNode(folder: folder, count: counts[id] ?? 0)
             }
-            let total = (try? app.repository.messageCount(accountId: account.id)) ?? 0
+            let total = counts.values.reduce(0, +)
             let storage = (try? app.repository.totalArchivedSize(accountId: account.id)) ?? 0
             let lastSynced = folderNodes.compactMap { $0.folder.lastSyncedAt }.max()
             nodes.append(AccountNode(account: account, folders: folderNodes, total: total, storageBytes: storage, lastSyncedAt: lastSynced))
@@ -90,15 +91,15 @@ final class MainModel {
         do {
             switch selection {
             case .search:
-                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, limit: pageSize, offset: 0)
-                searchTotal = trimmed.isEmpty ? 0 : (try? app.repository.searchMessageCount(query: trimmed)) ?? messages.count
+                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, filter: filter, limit: pageSize, offset: 0)
+                searchTotal = trimmed.isEmpty ? 0 : (try? app.repository.searchMessageCount(query: trimmed, filter: filter)) ?? messages.count
             case .folder(let id):
                 if trimmed.isEmpty {
-                    messages = try app.repository.messages(folderId: id, limit: pageSize, offset: 0)
+                    messages = try app.repository.messages(folderId: id, filter: filter, limit: pageSize, offset: 0)
                     searchTotal = 0
                 } else {
-                    messages = try app.repository.searchMessages(query: trimmed, folderId: id, limit: pageSize, offset: 0)
-                    searchTotal = (try? app.repository.searchMessageCount(query: trimmed, folderId: id)) ?? messages.count
+                    messages = try app.repository.searchMessages(query: trimmed, folderId: id, filter: filter, limit: pageSize, offset: 0)
+                    searchTotal = (try? app.repository.searchMessageCount(query: trimmed, folderId: id, filter: filter)) ?? messages.count
                 }
             default:
                 messages = []
@@ -127,12 +128,12 @@ final class MainModel {
             let next: [Message]
             switch selection {
             case .search:
-                next = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, limit: pageSize, offset: offset)
+                next = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, filter: filter, limit: pageSize, offset: offset)
             case .folder(let id):
                 if trimmed.isEmpty {
-                    next = try app.repository.messages(folderId: id, limit: pageSize, offset: offset)
+                    next = try app.repository.messages(folderId: id, filter: filter, limit: pageSize, offset: offset)
                 } else {
-                    next = try app.repository.searchMessages(query: trimmed, folderId: id, limit: pageSize, offset: offset)
+                    next = try app.repository.searchMessages(query: trimmed, folderId: id, filter: filter, limit: pageSize, offset: offset)
                 }
             default:
                 next = []
