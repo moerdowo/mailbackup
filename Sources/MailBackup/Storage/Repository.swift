@@ -4,7 +4,7 @@ import GRDB
 /// Database operations for accounts, folders, and messages.
 struct Repository {
     let database: Database
-    private var writer: DatabaseQueue { database.writer }
+    private var writer: any DatabaseWriter { database.writer }
 
     // MARK: - Accounts
 

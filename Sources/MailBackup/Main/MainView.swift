@@ -21,6 +21,7 @@ struct MainView: View {
 
 private struct MainContent: View {
     @Bindable var model: MainModel
+    @Environment(AppModel.self) private var app
     let onAddAccount: () -> Void
 
     var body: some View {
@@ -34,19 +35,23 @@ private struct MainContent: View {
             MessageDetailView(model: model)
                 .frame(minWidth: 420)
         }
+        .onChange(of: app.dataRevision) { _, _ in model.reloadSidebar() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await model.syncAll() }
-                } label: {
-                    if model.isSyncing {
-                        ProgressView().controlSize(.small)
-                    } else {
+                if app.isSyncing {
+                    Button { app.cancelSync() } label: {
+                        Label("Stop", systemImage: "stop.circle")
+                    }
+                    .help("Stop syncing")
+                } else {
+                    Button { app.startSyncAllAccounts() } label: {
                         Label("Sync", systemImage: "arrow.triangle.2.circlepath")
                     }
+                    .help("Sync all accounts")
                 }
-                .disabled(model.isSyncing)
-                .help("Sync all accounts")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                if app.isSyncing { ProgressView().controlSize(.small) }
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -67,7 +72,7 @@ private struct MainContent: View {
             }
         }
         .navigationTitle("MailBackup")
-        .navigationSubtitle(model.statusText ?? "")
+        .navigationSubtitle(app.syncStatusText ?? model.exportStatus ?? "")
     }
 
     // MARK: - Export
@@ -109,15 +114,15 @@ private struct MainContent: View {
 
         let store = model.app.archiveStore
         let count = messages.count
-        model.statusText = "Exporting \(count) message\(count == 1 ? "" : "s")…"
+        model.exportStatus = "Exporting \(count) message\(count == 1 ? "" : "s")…"
         Task.detached {
             do {
                 try Exporter.zip(messages: messages, store: store, folderName: folderName, to: url)
-                await MainActor.run { model.statusText = nil }
+                await MainActor.run { model.exportStatus = nil }
             } catch {
                 await MainActor.run {
                     model.errorMessage = error.localizedDescription
-                    model.statusText = nil
+                    model.exportStatus = nil
                 }
             }
         }
@@ -131,7 +136,7 @@ private struct MainContent: View {
 
     private var sidebar: some View {
         List(selection: $model.selectedFolderId) {
-            if let error = model.errorMessage {
+            if let error = model.errorMessage ?? app.syncError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red).font(.caption)
             }

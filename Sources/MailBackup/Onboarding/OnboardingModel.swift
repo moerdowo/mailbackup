@@ -37,10 +37,9 @@ final class OnboardingModel {
     var customArchivePath: String?
 
     // Initial sync
-    var isSyncing = false
-    var syncError: String?
-    var progress: SyncProgress?
-    var isDone = false
+    var didStartSync = false
+    var setupError: String?
+    private var savedAccount: Account?
 
     let app: AppModel
 
@@ -90,33 +89,32 @@ final class OnboardingModel {
         isLoadingFolders = false
     }
 
-    func startInitialSync() async {
-        guard !isSyncing else { return }
-        isSyncing = true
-        syncError = nil
-        step = .sync
+    /// Saves the account and kicks off the initial sync as an app-level
+    /// background task, then advances to the sync step. The user can keep using
+    /// the app while it runs.
+    func startInitialSync() {
+        guard !didStartSync else { return }
+        setupError = nil
 
         if let path = customArchivePath {
             app.setArchiveRoot(URL(fileURLWithPath: path, isDirectory: true))
         }
 
         let account = draftAccount
-        let folders = selectedFolders.sorted()
         do {
             try app.addAccount(account, password: password)
-            try await app.syncEngine.sync(
-                account: account,
-                password: password,
-                folderNames: folders
-            ) { progress in
-                Task { @MainActor in self.progress = progress }
-            }
-            isDone = true
-        } catch is CancellationError {
-            syncError = "Sync was cancelled."
         } catch {
-            syncError = error.localizedDescription
+            setupError = error.localizedDescription
+            return
         }
-        isSyncing = false
+        savedAccount = account
+        didStartSync = true
+        step = .sync
+        app.startSync([SyncJob(account: account, folderNames: selectedFolders.sorted())])
+    }
+
+    func retryInitialSync() {
+        guard let account = savedAccount else { return }
+        app.startSync([SyncJob(account: account, folderNames: selectedFolders.sorted())])
     }
 }

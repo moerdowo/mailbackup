@@ -262,13 +262,16 @@ private struct OptionsStep: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            if let error = model.setupError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red).font(.callout)
+            }
+
             HStack {
                 Button("Back") { model.step = .folders }
                 Spacer()
-                Button("Start Archiving") {
-                    Task { await model.startInitialSync() }
-                }
-                .keyboardShortcut(.defaultAction)
+                Button("Start Archiving") { model.startInitialSync() }
+                    .keyboardShortcut(.defaultAction)
             }
         }
     }
@@ -291,42 +294,48 @@ private struct OptionsStep: View {
 
 private struct SyncStep: View {
     @Bindable var model: OnboardingModel
+    @Environment(AppModel.self) private var app
     let onFinish: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
-            if model.isDone {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 56)).foregroundStyle(.green)
-                Text("Archive complete").font(.title2.bold())
-                Button("Open MailBackup") { onFinish() }
-                    .keyboardShortcut(.defaultAction)
-                    .controlSize(.large)
-            } else if let error = model.syncError {
+            if let error = app.syncError {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 48)).foregroundStyle(.red)
                 Text("Sync stopped").font(.title2.bold())
                 Text(error).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 HStack {
                     Button("Continue Anyway") { onFinish() }
-                    Button("Retry") { Task { await model.startInitialSync() } }
+                    Button("Retry") { model.retryInitialSync() }
                         .keyboardShortcut(.defaultAction)
                 }
+            } else if !app.isSyncing {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 56)).foregroundStyle(.green)
+                Text("Archive complete").font(.title2.bold())
+                Button("Open MailBackup") { onFinish() }
+                    .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
             } else {
                 ProgressView().controlSize(.large)
-                Text(model.progress?.phase ?? "Starting…").font(.headline)
-                if let progress = model.progress, progress.messagesTotal > 0 {
+                Text(app.syncProgress?.phase ?? "Starting…").font(.headline)
+                if let progress = app.syncProgress, progress.messagesTotal > 0 {
                     ProgressView(value: Double(progress.messagesDone), total: Double(progress.messagesTotal)) {
-                        Text("\(progress.folderName)")
+                        Text(progress.folderName)
                     } currentValueLabel: {
                         Text("\(progress.messagesDone) of \(progress.messagesTotal)")
                     }
                     .frame(maxWidth: 360)
                 }
-                if let progress = model.progress, progress.folderCount > 0 {
+                if let progress = app.syncProgress, progress.folderCount > 0 {
                     Text("Folder \(progress.folderIndex) of \(progress.folderCount)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Text("You can keep using MailBackup while this runs.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Continue in Background") { onFinish() }
+                    .controlSize(.large)
+                    .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity)

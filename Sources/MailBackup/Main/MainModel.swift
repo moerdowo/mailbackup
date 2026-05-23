@@ -31,10 +31,8 @@ final class MainModel {
     var messages: [Message] = []
     var selectedMessageId: Int64?
     var searchText = ""
-
-    var isSyncing = false
-    var statusText: String?
     var errorMessage: String?
+    var exportStatus: String?
 
     init(app: AppModel) {
         self.app = app
@@ -117,32 +115,5 @@ final class MainModel {
         guard let data = try? app.archiveStore.readEML(relativePath: message.emlPath) else { return nil }
         let mime = MIMEMessage(data: data)
         return MessageContent(html: mime.htmlBody, plainText: mime.plainText, attachments: mime.attachments)
-    }
-
-    func syncAll() async {
-        guard !isSyncing else { return }
-        isSyncing = true
-        errorMessage = nil
-        defer { isSyncing = false }
-
-        for account in app.accounts {
-            guard let password = app.password(for: account) else {
-                errorMessage = "No saved password for \(account.email)."
-                continue
-            }
-            let folderNames = ((try? app.repository.folders(accountId: account.id)) ?? []).map(\.name)
-            guard !folderNames.isEmpty else { continue }
-            do {
-                try await app.syncEngine.sync(account: account, password: password, folderNames: folderNames) { progress in
-                    Task { @MainActor in
-                        self.statusText = "\(account.email): \(progress.phase) \(progress.messagesTotal > 0 ? "(\(progress.messagesDone)/\(progress.messagesTotal))" : "")"
-                    }
-                }
-            } catch {
-                errorMessage = "Sync failed for \(account.email): \(error.localizedDescription)"
-            }
-        }
-        statusText = nil
-        reloadSidebar()
     }
 }

@@ -3,21 +3,25 @@ import GRDB
 
 /// Owns the SQLite connection and schema migrations for the local archive.
 final class Database {
-    let writer: DatabaseQueue
+    /// A WAL-backed pool so reads (browsing the archive) run concurrently with
+    /// the sync engine's writes. In-memory test databases use a queue.
+    let writer: any DatabaseWriter
 
     init(url: URL) throws {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        writer = try DatabaseQueue(path: url.path, configuration: config)
-        try Self.migrator.migrate(writer)
+        let pool = try DatabasePool(path: url.path, configuration: config)
+        try Self.migrator.migrate(pool)
+        writer = pool
     }
 
     /// In-memory database, used by tests and self-checks.
     init() throws {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        writer = try DatabaseQueue(configuration: config)
-        try Self.migrator.migrate(writer)
+        let queue = try DatabaseQueue(configuration: config)
+        try Self.migrator.migrate(queue)
+        writer = queue
     }
 
     static func makeDefault() throws -> Database {
