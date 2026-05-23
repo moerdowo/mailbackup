@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct MainView: View {
     @Environment(AppModel.self) private var app
@@ -47,6 +49,18 @@ private struct MainContent: View {
                 .help("Sync all accounts")
             }
             ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Export Selected Message…") { exportMessage() }
+                        .disabled(model.selectedMessage == nil)
+                    Button("Export Folder…") { exportFolder() }
+                        .disabled(model.selectedFolderId == nil)
+                    Button("Export Account…") { exportAccount() }
+                        .disabled(model.currentAccount() == nil)
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button { onAddAccount() } label: {
                     Label("Add Account", systemImage: "plus")
                 }
@@ -54,6 +68,65 @@ private struct MainContent: View {
         }
         .navigationTitle("MailBackup")
         .navigationSubtitle(model.statusText ?? "")
+    }
+
+    // MARK: - Export
+
+    private func exportMessage() {
+        guard let message = model.selectedMessage else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = Exporter.filename(for: message)
+        panel.allowedContentTypes = [UTType(filenameExtension: "eml") ?? .data]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try Exporter.writeEML(message: message, store: model.app.archiveStore, to: url)
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func exportFolder() {
+        guard let folderName = model.selectedFolderName() else { return }
+        let safe = sanitizeName(folderName)
+        presentZipPanel(suggested: "\(safe).zip", folderName: safe, messages: model.currentFolderMessages())
+    }
+
+    private func exportAccount() {
+        guard let account = model.currentAccount() else { return }
+        let safe = sanitizeName(account.displayName)
+        presentZipPanel(suggested: "\(safe).zip", folderName: safe, messages: model.messages(for: account))
+    }
+
+    private func presentZipPanel(suggested: String, folderName: String, messages: [Message]) {
+        guard !messages.isEmpty else {
+            model.errorMessage = "Nothing to export."
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggested
+        panel.allowedContentTypes = [.zip]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let store = model.app.archiveStore
+        let count = messages.count
+        model.statusText = "Exporting \(count) message\(count == 1 ? "" : "s")…"
+        Task.detached {
+            do {
+                try Exporter.zip(messages: messages, store: store, folderName: folderName, to: url)
+                await MainActor.run { model.statusText = nil }
+            } catch {
+                await MainActor.run {
+                    model.errorMessage = error.localizedDescription
+                    model.statusText = nil
+                }
+            }
+        }
+    }
+
+    private func sanitizeName(_ name: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        let cleaned = name.components(separatedBy: invalid).joined(separator: "_")
+        return cleaned.isEmpty ? "Export" : cleaned
     }
 
     private var sidebar: some View {

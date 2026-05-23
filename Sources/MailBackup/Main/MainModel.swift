@@ -94,6 +94,25 @@ final class MainModel {
         return nil
     }
 
+    func currentAccount() -> Account? {
+        accountNodes.first { node in
+            node.folders.contains { $0.id == selectedFolderId }
+        }?.account
+    }
+
+    func currentFolderMessages() -> [Message] {
+        guard let folderId = selectedFolderId else { return [] }
+        return (try? app.repository.messages(folderId: folderId, limit: 1_000_000)) ?? []
+    }
+
+    func messages(for account: Account) -> [Message] {
+        let folders = (try? app.repository.folders(accountId: account.id)) ?? []
+        return folders.flatMap { folder -> [Message] in
+            guard let id = folder.id else { return [] }
+            return (try? app.repository.messages(folderId: id, limit: 1_000_000)) ?? []
+        }
+    }
+
     func loadContent(for message: Message) -> MessageContent? {
         guard let data = try? app.archiveStore.readEML(relativePath: message.emlPath) else { return nil }
         let mime = MIMEMessage(data: data)
