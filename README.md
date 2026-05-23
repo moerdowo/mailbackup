@@ -15,16 +15,21 @@ on your Mac — nothing is sent anywhere else.
 ## Features
 
 - **Multiple IMAP accounts** with provider presets (Gmail, iCloud, Outlook, Fastmail, Yahoo, Purelymail, or any custom server). SSL/TLS and STARTTLS supported.
-- **Incremental sync** — UID-based, only fetches new messages; handles `UIDVALIDITY` resets. Messages are fetched with `BODY.PEEK[]`, so mail is never marked read on the server.
-- **Background sync** — runs as an app-level task on a WAL-backed database, so you can browse and read already-archived mail while a sync is in progress.
-- **Local storage** — each message saved as a portable `.eml` on disk; metadata and a full-text index live in SQLite.
-- **Full-text search** — per-folder, or across **all accounts** from a dedicated search view.
-- **Reading** — three-pane UI with an HTML message viewer that **blocks all remote content** (no tracking pixels), a Rich/Plain toggle, and savable attachments.
-- **Dashboard** — sync status, summary stats (accounts, messages, folders, storage), and per-account controls.
-- **Jobs & Log** — a live view of sync runs and a persistent activity log.
-- **Menu bar** — a menu-bar item mirrors the dashboard (sync status, stats, quick sync/pause) and shows a sync icon while syncing; can be turned off in Settings.
-- **Export** — a single message as `.eml`, or a folder/account as a zipped EML archive.
-- **Privacy first** — credentials are stored in the macOS **Keychain**, never on disk in plaintext.
+- **Incremental, headers-first sync** — UID-based; fetches envelopes first so the list fills instantly, then streams bodies. Uses `BODY.PEEK[]`, so mail is never marked read on the server, and handles `UIDVALIDITY` resets.
+- **Background sync & scheduling** — runs as an app-level task on a WAL-backed database (browse while syncing); optional per-account interval (hourly/daily). **Pause** globally or per account.
+- **Local storage** — each message saved as a portable `.eml` on disk; metadata + a full-text index in SQLite. Paged loading keeps very large mailboxes fast.
+- **Search, sort & filter** — full-text search per-folder or across **all accounts**; sort by date/relevance, filter unread / with-attachments, and **saved searches** in the sidebar.
+- **Conversation view** — optional grouping into threads by subject.
+- **Reading** — three-pane UI with an HTML viewer that **blocks all remote content** (no tracking pixels), Rich/Plain toggle, savable attachments, and **Quick Look** for attachments and the raw `.eml`.
+- **Spotlight** — archived messages are indexed so macOS system search finds them.
+- **Dashboard, Jobs & Log** — sync status and stats, a live view of sync runs, and a persistent activity log.
+- **Menu bar** — mirrors the dashboard and shows a sync icon while syncing; toggle off in Settings.
+- **Import** — bring in existing `.mbox`, `.eml`, or ZIP-of-`.eml` archives (into a local, never-synced account).
+- **Export & print** — a message as `.eml` or **PDF**, **print** it, or export a folder/account as a **zip** or **Maildir**.
+- **Notifications** when a sync finishes or fails.
+- **Maintenance** — verify archive integrity (and remove orphaned entries).
+- **Account management** — edit connection details, change the password, pick which folders to archive, and remove an account (with its local archive).
+- **Privacy first** — credentials in the macOS **Keychain**; optional **at-rest encryption** of `.eml` files (pair with FileVault for full coverage).
 
 ## Install
 
