@@ -107,6 +107,7 @@ final class AppModel {
         // Remove the account's on-disk archive (root/<accountId>/...).
         let directory = archiveStore.root.appendingPathComponent(account.id, isDirectory: true)
         try? FileManager.default.removeItem(at: directory)
+        SpotlightIndexer.deindexAccount(account.id)
         jobs.removeAll { $0.accountEmail == account.email }
         activityLog.log("Removed account \(account.email) and its local archive", category: "Account", level: .warning)
         reloadAccounts()
@@ -140,6 +141,7 @@ final class AppModel {
 
         for folder in existing where !selectedNames.contains(folder.name) {
             if let id = folder.id {
+                SpotlightIndexer.deindexMessages(ids: (try? repository.messageIds(folderId: id)) ?? [])
                 try? repository.deleteMessages(folderId: id)
                 try? repository.deleteFolder(id: id)
             }
@@ -230,7 +232,8 @@ final class AppModel {
                             from: raw, accountId: account.id, folderId: folderId,
                             folderName: folderName, uid: nextUID, store: store
                         )
-                        try repo.insertMessage(message)
+                        let stored = try repo.insertMessage(message)
+                        SpotlightIndexer.index(stored)
                         nextUID += 1
                         total += 1
                         if total % 50 == 0 {

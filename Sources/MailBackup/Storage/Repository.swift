@@ -76,10 +76,18 @@ struct Repository {
         }
     }
 
-    func insertMessage(_ message: Message) throws {
+    @discardableResult
+    func insertMessage(_ message: Message) throws -> Message {
         try writer.write { db in
             var stored = message
             try stored.insert(db)
+            return stored
+        }
+    }
+
+    func messageIds(folderId: Int64) throws -> [Int64] {
+        try writer.read { db in
+            try Int64.fetchAll(db, sql: "SELECT id FROM message WHERE folderId = ?", arguments: [folderId])
         }
     }
 

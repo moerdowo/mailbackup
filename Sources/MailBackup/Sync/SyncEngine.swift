@@ -128,6 +128,7 @@ final class SyncEngine {
             bodyText: mime.plainText,
             snippet: mime.snippet()
         )
-        try repository.insertMessage(message)
+        let stored = try repository.insertMessage(message)
+        SpotlightIndexer.index(stored)
     }
 }
