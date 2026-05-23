@@ -15,13 +15,17 @@ struct LogView: View {
             Divider()
 
             if app.activityLog.entries.isEmpty {
-                ContentUnavailableView("No activity yet", systemImage: "list.bullet.rectangle")
+                Text("No activity yet.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
             } else {
                 List(app.activityLog.entries) { entry in
                     LogRow(entry: entry)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 

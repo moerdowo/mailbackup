@@ -136,10 +136,11 @@ private struct MainContent: View {
         case .folder:
             HSplitView {
                 messageList
-                    .frame(minWidth: 280, idealWidth: 340)
+                    .frame(minWidth: 280, idealWidth: 340, maxHeight: .infinity)
                 MessageDetailView(model: model)
-                    .frame(minWidth: 420)
+                    .frame(minWidth: 420, maxHeight: .infinity)
             }
+            .frame(maxHeight: .infinity)
         case .search:
             SearchView(model: model)
         case .jobs:

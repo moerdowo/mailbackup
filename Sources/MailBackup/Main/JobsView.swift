@@ -20,14 +20,20 @@ struct JobsView: View {
             Divider()
 
             if app.jobs.isEmpty {
-                ContentUnavailableView("No sync jobs yet", systemImage: "arrow.triangle.2.circlepath",
-                                       description: Text("Trigger a sync from the dashboard or an account."))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No sync jobs yet").font(.headline)
+                    Text("Trigger a sync from the dashboard or an account.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
             } else {
                 List(app.jobs) { job in
                     JobRow(job: job)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 

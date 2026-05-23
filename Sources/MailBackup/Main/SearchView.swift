@@ -14,11 +14,13 @@ struct SearchView: View {
             Divider()
             HSplitView {
                 results
-                    .frame(minWidth: 300, idealWidth: 380)
+                    .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
                 MessageDetailView(model: model)
-                    .frame(minWidth: 420)
+                    .frame(minWidth: 420, maxHeight: .infinity)
             }
+            .frame(maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { searchFocused = true }
     }
 
