@@ -100,7 +100,7 @@ private struct MainContent: View {
             }
         }
         .navigationTitle("MailBackup")
-        .navigationSubtitle(app.syncStatusText ?? model.exportStatus ?? "")
+        .navigationSubtitle(app.syncStatusText ?? app.importStatus ?? model.exportStatus ?? "")
     }
 
     // MARK: - Export

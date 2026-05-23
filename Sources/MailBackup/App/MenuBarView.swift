@@ -43,16 +43,20 @@ struct MenuBarView: View {
                                     .font(.caption2).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            if entry.account.isPaused {
+                            if entry.account.isLocal {
+                                Text("Imported").font(.caption2).foregroundStyle(.blue)
+                            } else if entry.account.isPaused {
                                 Text("Paused").font(.caption2).foregroundStyle(.orange)
                             }
-                            Button {
-                                app.syncAccount(entry.account)
-                            } label: {
-                                Image(systemName: "arrow.triangle.2.circlepath")
+                            if !entry.account.isLocal {
+                                Button {
+                                    app.syncAccount(entry.account)
+                                } label: {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(app.isSyncing || app.isPaused || entry.account.isPaused)
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(app.isSyncing || app.isPaused || entry.account.isPaused)
                         }
                     }
                 }

@@ -114,6 +114,12 @@ final class Database {
             """)
         }
 
+        migrator.registerMigration("v4-account-local") { db in
+            try db.alter(table: "account") { t in
+                t.add(column: "isLocal", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }

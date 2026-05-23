@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct DashboardView: View {
     @Bindable var model: MainModel
@@ -49,6 +50,10 @@ struct DashboardView: View {
             HStack {
                 Text("Accounts").font(.title2.bold())
                 Spacer()
+                Button { importMail() } label: {
+                    Label("Import…", systemImage: "square.and.arrow.down")
+                }
+                .disabled(app.isImporting)
                 Button {
                     onAddAccount()
                 } label: {
@@ -69,6 +74,18 @@ struct DashboardView: View {
     private func byteString(_ count: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file)
     }
+
+    private func importMail() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose .mbox, .eml, or .zip files to import"
+        panel.prompt = "Import"
+        if panel.runModal() == .OK, !panel.urls.isEmpty {
+            app.importFiles(panel.urls)
+        }
+    }
 }
 
 private struct SyncStatusCard: View {
@@ -80,7 +97,11 @@ private struct SyncStatusCard: View {
         GroupBox {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    if app.isPaused {
+                    if app.isImporting {
+                        Label(app.importStatus ?? "Importing…", systemImage: "square.and.arrow.down")
+                            .font(.headline)
+                        ProgressView().controlSize(.small)
+                    } else if app.isPaused {
                         Label("Syncing paused", systemImage: "pause.circle.fill")
                             .font(.headline).foregroundStyle(.orange)
                         Text("Automatic and manual syncs are paused.")
@@ -183,7 +204,13 @@ private struct AccountCard: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         Text(node.account.displayName).font(.headline)
-                        if isPaused {
+                        if node.account.isLocal {
+                            Text("Imported")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(.blue.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.blue)
+                        } else if isPaused {
                             Text("Paused")
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6).padding(.vertical, 1)
@@ -206,28 +233,32 @@ private struct AccountCard: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Button {
-                    app.syncAccount(node.account)
-                } label: {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                if !node.account.isLocal {
+                    Button {
+                        app.syncAccount(node.account)
+                    } label: {
+                        Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(app.isSyncing || app.isPaused || isPaused)
+                    .fixedSize()
                 }
-                .disabled(app.isSyncing || app.isPaused || isPaused)
-                .fixedSize()
 
                 Menu {
-                    Button { showingSettings = true } label: {
-                        Label("Settings…", systemImage: "gearshape")
-                    }
-                    if isPaused {
-                        Button { app.setAccountPaused(node.account, paused: false) } label: {
-                            Label("Resume Syncing", systemImage: "play")
+                    if !node.account.isLocal {
+                        Button { showingSettings = true } label: {
+                            Label("Settings…", systemImage: "gearshape")
                         }
-                    } else {
-                        Button { app.setAccountPaused(node.account, paused: true) } label: {
-                            Label("Pause Syncing", systemImage: "pause")
+                        if isPaused {
+                            Button { app.setAccountPaused(node.account, paused: false) } label: {
+                                Label("Resume Syncing", systemImage: "play")
+                            }
+                        } else {
+                            Button { app.setAccountPaused(node.account, paused: true) } label: {
+                                Label("Pause Syncing", systemImage: "pause")
+                            }
                         }
+                        Divider()
                     }
-                    Divider()
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {

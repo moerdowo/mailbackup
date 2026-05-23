@@ -11,6 +11,7 @@ struct MailBackupApp: App {
         StorageSelfTest.runHeadlessIfRequested()
         MIMESelfTest.runHeadlessIfRequested()
         ExportSelfTest.runHeadlessIfRequested()
+        ImportSelfTest.runHeadlessIfRequested()
     }
 
     var body: some Scene {

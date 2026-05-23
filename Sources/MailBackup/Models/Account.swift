@@ -30,6 +30,7 @@ struct Account: Identifiable, Codable, Equatable {
     var syncIntervalMinutes: Int?  // nil = manual only
     var archivePath: String?       // nil = default archive root
     var isPaused: Bool             // excluded from syncs while true
+    var isLocal: Bool              // import-only account; never synced to a server
     var createdAt: Date
 
     init(
@@ -44,6 +45,7 @@ struct Account: Identifiable, Codable, Equatable {
         syncIntervalMinutes: Int? = nil,
         archivePath: String? = nil,
         isPaused: Bool = false,
+        isLocal: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -57,6 +59,7 @@ struct Account: Identifiable, Codable, Equatable {
         self.syncIntervalMinutes = syncIntervalMinutes
         self.archivePath = archivePath
         self.isPaused = isPaused
+        self.isLocal = isLocal
         self.createdAt = createdAt
     }
 }

@@ -38,6 +38,9 @@ final class AppModel {
     /// Persistent activity log, shown in the Log view.
     let activityLog = ActivityLog()
 
+    private(set) var isImporting = false
+    private(set) var importStatus: String?
+
     let database: Database
     let repository: Repository
     private(set) var archiveRoot: URL
@@ -156,9 +159,9 @@ final class AppModel {
 
     // MARK: - Background sync
 
-    /// Syncs every (non-paused) account using its already-archived folders.
+    /// Syncs every (non-paused, non-local) account using its archived folders.
     func startSyncAllAccounts() {
-        let jobs = accounts.filter { !$0.isPaused }.compactMap { account -> SyncJob? in
+        let jobs = accounts.filter { !$0.isPaused && !$0.isLocal }.compactMap { account -> SyncJob? in
             let names = ((try? repository.folders(accountId: account.id)) ?? []).map(\.name)
             return names.isEmpty ? nil : SyncJob(account: account, folderNames: names)
         }
@@ -167,9 +170,78 @@ final class AppModel {
 
     /// Syncs a single account using its archived folders.
     func syncAccount(_ account: Account) {
-        guard !account.isPaused else { return }
+        guard !account.isPaused, !account.isLocal else { return }
         let names = ((try? repository.folders(accountId: account.id)) ?? []).map(\.name)
         startSync([SyncJob(account: account, folderNames: names)])
+    }
+
+    // MARK: - Import
+
+    func importFiles(_ urls: [URL]) {
+        guard !isImporting, !urls.isEmpty else { return }
+        isImporting = true
+        importStatus = "Importing…"
+        let account = ensureLocalAccount()
+        let repo = repository
+        let store = archiveStore
+
+        Task.detached { [weak self] in
+            var total = 0
+            for url in urls {
+                let base = url.deletingPathExtension().lastPathComponent
+                let folderName = base.isEmpty ? "Imported" : base
+                do {
+                    let raws = try Importer.rawMessages(from: url)
+                    let folder = try repo.upsertFolder(Folder(accountId: account.id, name: folderName))
+                    guard let folderId = folder.id else { continue }
+                    var nextUID = ((try? repo.existingUIDs(folderId: folderId).max()) ?? 0) + 1
+                    for raw in raws {
+                        let message = try Importer.makeMessage(
+                            from: raw, accountId: account.id, folderId: folderId,
+                            folderName: folderName, uid: nextUID, store: store
+                        )
+                        try repo.insertMessage(message)
+                        nextUID += 1
+                        total += 1
+                        if total % 50 == 0 {
+                            let count = total
+                            await MainActor.run {
+                                self?.importStatus = "Imported \(count)…"
+                                self?.dataRevision &+= 1
+                            }
+                        }
+                    }
+                } catch {
+                    let name = url.lastPathComponent
+                    let description = error.localizedDescription
+                    await MainActor.run {
+                        self?.activityLog.log("Import failed for \(name): \(description)", category: "Import", level: .error)
+                    }
+                }
+            }
+            let final = total
+            await MainActor.run {
+                guard let self else { return }
+                self.isImporting = false
+                self.importStatus = nil
+                self.activityLog.log("Imported \(final) message\(final == 1 ? "" : "s")", category: "Import")
+                self.reloadAccounts()
+                self.dataRevision &+= 1
+                Notifier.notify(title: "Import complete", body: "\(final) message\(final == 1 ? "" : "s") imported.")
+            }
+        }
+    }
+
+    /// Returns the shared import-only account, creating it if needed.
+    private func ensureLocalAccount() -> Account {
+        if let existing = accounts.first(where: { $0.isLocal }) { return existing }
+        let account = Account(
+            displayName: "Imported Mail", email: "imported@local",
+            imapHost: "", imapPort: 0, security: .none, username: "", isLocal: true
+        )
+        try? repository.saveAccount(account)
+        reloadAccounts()
+        return account
     }
 
     // MARK: - Pause
@@ -198,7 +270,7 @@ final class AppModel {
     private func runDueSyncs() {
         guard !isPaused, !isSyncing else { return }
         let now = Date()
-        let due = accounts.filter { !$0.isPaused }.compactMap { account -> SyncJob? in
+        let due = accounts.filter { !$0.isPaused && !$0.isLocal }.compactMap { account -> SyncJob? in
             guard let interval = account.syncIntervalMinutes else { return nil }
             let folders = (try? repository.folders(accountId: account.id)) ?? []
             guard !folders.isEmpty else { return nil }
