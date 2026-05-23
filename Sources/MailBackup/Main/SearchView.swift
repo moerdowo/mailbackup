@@ -47,7 +47,7 @@ struct SearchView: View {
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
 
             if hasQuery {
-                Text("\(model.messages.count) result\(model.messages.count == 1 ? "" : "s")")
+                Text("\(model.searchTotal) result\(model.searchTotal == 1 ? "" : "s")")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -65,15 +65,20 @@ struct SearchView: View {
         } else if model.messages.isEmpty {
             ContentUnavailableView.search(text: model.searchText)
         } else {
-            List(model.messages, selection: $model.selectedMessageId) { message in
-                VStack(alignment: .leading, spacing: 3) {
-                    MessageRow(message: message)
-                    Text(model.contextLabel(for: message))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+            List(selection: $model.selectedMessageId) {
+                ForEach(model.messages) { message in
+                    VStack(alignment: .leading, spacing: 3) {
+                        MessageRow(message: message)
+                        Text(model.contextLabel(for: message))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .tag(message.id)
                 }
-                .tag(message.id)
+                if model.hasMoreMessages {
+                    PagingFooter().onAppear { model.loadMore() }
+                }
             }
         }
     }

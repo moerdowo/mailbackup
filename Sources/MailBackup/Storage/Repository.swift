@@ -89,20 +89,20 @@ struct Repository {
         try writer.read { try Message.fetchOne($0, key: id) }
     }
 
-    /// Messages in a folder, newest first.
-    func messages(folderId: Int64, limit: Int = 2000) throws -> [Message] {
+    /// A page of messages in a folder, newest first.
+    func messages(folderId: Int64, limit: Int = 2000, offset: Int = 0) throws -> [Message] {
         try writer.read { db in
             try Message
                 .filter(Column("folderId") == folderId)
                 .order(sql: "COALESCE(internalDate, date, createdAt) DESC")
-                .limit(limit)
+                .limit(limit, offset: offset)
                 .fetchAll(db)
         }
     }
 
-    /// Full-text search, optionally scoped to a folder or account. Newest first
-    /// within relevance is approximated by FTS rank.
-    func searchMessages(query: String, folderId: Int64? = nil, accountId: String? = nil, limit: Int = 500) throws -> [Message] {
+    /// A page of full-text search results, optionally scoped to a folder or
+    /// account. Ordered by FTS rank.
+    func searchMessages(query: String, folderId: Int64? = nil, accountId: String? = nil, limit: Int = 100, offset: Int = 0) throws -> [Message] {
         let expression = Repository.ftsExpression(query)
         guard !expression.isEmpty else { return [] }
 
@@ -112,18 +112,41 @@ struct Repository {
         WHERE message_fts MATCH ?
         """
         var arguments: [DatabaseValueConvertible] = [expression]
+        appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
+        sql += " ORDER BY rank LIMIT ? OFFSET ?"
+        arguments.append(limit)
+        arguments.append(offset)
+
+        return try writer.read { db in
+            try Message.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+
+    /// Total number of full-text matches for a query (for "N results").
+    func searchMessageCount(query: String, folderId: Int64? = nil, accountId: String? = nil) throws -> Int {
+        let expression = Repository.ftsExpression(query)
+        guard !expression.isEmpty else { return 0 }
+
+        var sql = """
+        SELECT COUNT(*) FROM message
+        JOIN message_fts ON message_fts.rowid = message.id
+        WHERE message_fts MATCH ?
+        """
+        var arguments: [DatabaseValueConvertible] = [expression]
+        appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
+
+        return try writer.read { db in
+            try Int.fetchOne(db, sql: sql, arguments: StatementArguments(arguments)) ?? 0
+        }
+    }
+
+    private func appendScope(folderId: Int64?, accountId: String?, to sql: inout String, arguments: inout [DatabaseValueConvertible]) {
         if let folderId {
             sql += " AND message.folderId = ?"
             arguments.append(folderId)
         } else if let accountId {
             sql += " AND message.accountId = ?"
             arguments.append(accountId)
-        }
-        sql += " ORDER BY rank LIMIT ?"
-        arguments.append(limit)
-
-        return try writer.read { db in
-            try Message.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
         }
     }
 

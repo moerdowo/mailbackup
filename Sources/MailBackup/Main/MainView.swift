@@ -31,7 +31,12 @@ private struct MainContent: View {
         } detail: {
             rightArea
         }
-        .onChange(of: app.dataRevision) { _, _ in model.reloadSidebar() }
+        .onChange(of: app.dataRevision) { _, _ in
+            model.reloadSidebar()
+            // Refresh the visible list with newly synced mail only when the user
+            // is at the top, so deep-paged scrolling isn't reset mid-sync.
+            if model.isViewingFirstPage { model.refreshMessages() }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if app.isSyncing {
@@ -191,8 +196,13 @@ private struct MainContent: View {
     }
 
     private var messageList: some View {
-        List(model.messages, selection: $model.selectedMessageId) { message in
-            MessageRow(message: message).tag(message.id)
+        List(selection: $model.selectedMessageId) {
+            ForEach(model.messages) { message in
+                MessageRow(message: message).tag(message.id)
+            }
+            if model.hasMoreMessages {
+                PagingFooter().onAppear { model.loadMore() }
+            }
         }
         .overlay {
             if model.messages.isEmpty {
@@ -204,6 +214,21 @@ private struct MainContent: View {
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search archived mail")
         .onChange(of: model.searchText) { _, _ in model.refreshMessages() }
+    }
+}
+
+/// Footer row shown at the end of a paged list; loading more is triggered by
+/// its `.onAppear` at the call site.
+struct PagingFooter: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            ProgressView().controlSize(.small)
+            Text("Loading more…").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .listRowSeparator(.hidden)
     }
 }
 

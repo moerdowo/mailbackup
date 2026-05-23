@@ -70,6 +70,22 @@ enum StorageSelfTest {
         }
         guard hits == 1 else { throw fail("FTS match returned \(hits), expected 1") }
 
+        // Paging: insert 150 more (151 total) and verify offset pages.
+        let repository = Repository(database: db)
+        for uid in 1000..<1150 {
+            try repository.insertMessage(
+                Message(accountId: account.id, folderId: folderId, uid: uid, emlPath: "p/\(uid).eml")
+            )
+        }
+        let page0 = try repository.messages(folderId: folderId, limit: 100, offset: 0)
+        let page1 = try repository.messages(folderId: folderId, limit: 100, offset: 100)
+        guard page0.count == 100, page1.count == 51 else {
+            throw fail("paging counts \(page0.count)/\(page1.count), expected 100/51")
+        }
+        guard Set(page0.map(\.uid)).isDisjoint(with: Set(page1.map(\.uid))) else {
+            throw fail("paging pages overlap")
+        }
+
         // Keychain roundtrip.
         let secret = "app-password-\(UUID().uuidString)"
         try Keychain.setPassword(secret, account: account.id)

@@ -50,9 +50,17 @@ final class MainModel {
     var errorMessage: String?
     var exportStatus: String?
 
+    // Paging
+    let pageSize = 100
+    var hasMoreMessages = false
+    var searchTotal = 0
+    private var isLoadingPage = false
+    var isViewingFirstPage: Bool { messages.count <= pageSize }
+
     init(app: AppModel) {
         self.app = app
         reloadSidebar()
+        refreshMessages()
     }
 
     func reloadSidebar() {
@@ -70,34 +78,70 @@ final class MainModel {
             nodes.append(AccountNode(account: account, folders: folderNodes, total: total, storageBytes: storage, lastSyncedAt: lastSynced))
         }
         accountNodes = nodes
-        refreshMessages()
     }
 
     var totalMessages: Int { accountNodes.reduce(0) { $0 + $1.total } }
     var totalStorageBytes: Int { accountNodes.reduce(0) { $0 + $1.storageBytes } }
     var totalFolders: Int { accountNodes.reduce(0) { $0 + $1.folders.count } }
 
+    /// Loads the first page for the current selection/query, resetting paging.
     func refreshMessages() {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             switch selection {
             case .search:
-                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed)
+                messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, limit: pageSize, offset: 0)
+                searchTotal = trimmed.isEmpty ? 0 : (try? app.repository.searchMessageCount(query: trimmed)) ?? messages.count
             case .folder(let id):
                 if trimmed.isEmpty {
-                    messages = try app.repository.messages(folderId: id)
+                    messages = try app.repository.messages(folderId: id, limit: pageSize, offset: 0)
+                    searchTotal = 0
                 } else {
-                    messages = try app.repository.searchMessages(query: trimmed, folderId: id)
+                    messages = try app.repository.searchMessages(query: trimmed, folderId: id, limit: pageSize, offset: 0)
+                    searchTotal = (try? app.repository.searchMessageCount(query: trimmed, folderId: id)) ?? messages.count
                 }
             default:
                 messages = []
+                searchTotal = 0
             }
+            hasMoreMessages = messages.count == pageSize
             if !messages.contains(where: { $0.id == selectedMessageId }) {
                 selectedMessageId = messages.first?.id
             }
         } catch {
             errorMessage = error.localizedDescription
             messages = []
+            hasMoreMessages = false
+        }
+    }
+
+    /// Appends the next page. Safe to call repeatedly (re-entrancy guarded).
+    func loadMore() {
+        guard hasMoreMessages, !isLoadingPage else { return }
+        isLoadingPage = true
+        defer { isLoadingPage = false }
+
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let offset = messages.count
+        do {
+            let next: [Message]
+            switch selection {
+            case .search:
+                next = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, limit: pageSize, offset: offset)
+            case .folder(let id):
+                if trimmed.isEmpty {
+                    next = try app.repository.messages(folderId: id, limit: pageSize, offset: offset)
+                } else {
+                    next = try app.repository.searchMessages(query: trimmed, folderId: id, limit: pageSize, offset: offset)
+                }
+            default:
+                next = []
+            }
+            messages.append(contentsOf: next)
+            hasMoreMessages = next.count == pageSize
+        } catch {
+            errorMessage = error.localizedDescription
+            hasMoreMessages = false
         }
     }
 

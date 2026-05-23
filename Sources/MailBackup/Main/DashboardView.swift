@@ -30,13 +30,13 @@ struct DashboardView: View {
                 accountsSection
             }
             .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 900, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
     }
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
             StatCard(title: "Accounts", value: "\(model.accountNodes.count)", systemImage: "person.crop.circle")
             StatCard(title: "Messages", value: "\(model.totalMessages)", systemImage: "envelope")
             StatCard(title: "Folders", value: "\(model.totalFolders)", systemImage: "folder")
