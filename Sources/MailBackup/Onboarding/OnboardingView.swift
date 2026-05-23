@@ -22,12 +22,29 @@ struct OnboardingView: View {
 
 private struct OnboardingContent: View {
     @Bindable var model: OnboardingModel
+    @Environment(AppModel.self) private var app
     let onFinish: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            StepIndicator(current: model.step)
-                .padding(.vertical, 20)
+            ZStack {
+                StepIndicator(current: model.step)
+                if app.hasAccounts {
+                    HStack {
+                        Button {
+                            onFinish()
+                        } label: {
+                            Label("Cancel", systemImage: "chevron.left")
+                        }
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.cancelAction)
+                        .help("Back to dashboard")
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .padding(.vertical, 20)
             Divider()
             ScrollView {
                 stepView
