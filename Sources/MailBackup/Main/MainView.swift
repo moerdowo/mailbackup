@@ -66,14 +66,14 @@ private struct MainContent: View {
                         Picker("Sort", selection: $model.filter.sort) {
                             Text(MessageSort.newest.label).tag(MessageSort.newest)
                             Text(MessageSort.oldest.label).tag(MessageSort.oldest)
-                            if model.selection == .search {
+                            if model.isSearchMode {
                                 Text(MessageSort.relevance.label).tag(MessageSort.relevance)
                             }
                         }
                         Divider()
                         Toggle("Unread only", isOn: $model.filter.unreadOnly)
                         Toggle("With attachments", isOn: $model.filter.hasAttachmentOnly)
-                        if model.selection != .search {
+                        if !model.isSearchMode {
                             Divider()
                             Toggle("Group by conversation", isOn: $model.threaded)
                         }
@@ -242,7 +242,7 @@ private struct MainContent: View {
 
     private var showsMessageList: Bool {
         switch model.selection {
-        case .folder, .search: return true
+        case .folder, .search, .savedSearch: return true
         default: return false
         }
     }
@@ -258,7 +258,7 @@ private struct MainContent: View {
                     .frame(minWidth: 420, maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
-        case .search:
+        case .search, .savedSearch:
             SearchView(model: model)
         case .jobs:
             JobsView()
@@ -283,6 +283,23 @@ private struct MainContent: View {
                 .tag(SidebarItem.jobs)
             Label("Log", systemImage: "list.bullet.rectangle")
                 .tag(SidebarItem.log)
+
+            if !app.savedSearches.isEmpty {
+                Section("Saved Searches") {
+                    ForEach(app.savedSearches) { saved in
+                        Label(saved.name, systemImage: "bookmark")
+                            .tag(SidebarItem.savedSearch(saved.id))
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    app.deleteSavedSearch(saved.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+            }
+
             ForEach(model.accountNodes) { node in
                 Section {
                     ForEach(node.folders) { folder in
@@ -301,8 +318,13 @@ private struct MainContent: View {
             }
         }
         .listStyle(.sidebar)
-        .onChange(of: model.selection) { _, _ in
-            model.searchText = ""   // start each view with a clean query
+        .onChange(of: model.selection) { _, newValue in
+            if case .savedSearch(let id) = newValue,
+               let saved = app.savedSearches.first(where: { $0.id == id }) {
+                model.searchText = saved.query
+            } else {
+                model.searchText = ""   // start each view with a clean query
+            }
             model.refreshMessages()
         }
     }

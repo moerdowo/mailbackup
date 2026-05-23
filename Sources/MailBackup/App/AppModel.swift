@@ -41,6 +41,9 @@ final class AppModel {
     private(set) var isImporting = false
     private(set) var importStatus: String?
 
+    private(set) var savedSearches: [SavedSearch] = AppModel.loadSavedSearches()
+    private static let savedSearchesKey = "savedSearches"
+
     let database: Database
     let repository: Repository
     private(set) var archiveRoot: URL
@@ -155,6 +158,33 @@ final class AppModel {
 
     func password(for account: Account) -> String? {
         try? Keychain.password(account: account.id)
+    }
+
+    // MARK: - Saved searches
+
+    func addSavedSearch(name: String, query: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let trimmedQuery = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty, !trimmedQuery.isEmpty else { return }
+        savedSearches.append(SavedSearch(name: trimmedName, query: trimmedQuery))
+        persistSavedSearches()
+    }
+
+    func deleteSavedSearch(_ id: UUID) {
+        savedSearches.removeAll { $0.id == id }
+        persistSavedSearches()
+    }
+
+    private func persistSavedSearches() {
+        if let data = try? JSONEncoder().encode(savedSearches) {
+            UserDefaults.standard.set(data, forKey: AppModel.savedSearchesKey)
+        }
+    }
+
+    private static func loadSavedSearches() -> [SavedSearch] {
+        guard let data = UserDefaults.standard.data(forKey: savedSearchesKey),
+              let decoded = try? JSONDecoder().decode([SavedSearch].self, from: data) else { return [] }
+        return decoded
     }
 
     // MARK: - Background sync

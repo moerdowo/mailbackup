@@ -3,6 +3,8 @@ import SwiftUI
 struct SearchView: View {
     @Bindable var model: MainModel
     @FocusState private var searchFocused: Bool
+    @State private var showingSave = false
+    @State private var saveName = ""
 
     private var hasQuery: Bool {
         !model.searchText.trimmingCharacters(in: .whitespaces).isEmpty
@@ -51,9 +53,26 @@ struct SearchView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                Button {
+                    saveName = model.searchText
+                    showingSave = true
+                } label: {
+                    Image(systemName: "bookmark")
+                }
+                .buttonStyle(.borderless)
+                .help("Save this search")
             }
         }
         .padding(12)
+        .alert("Save Search", isPresented: $showingSave) {
+            TextField("Name", text: $saveName)
+            Button("Save") {
+                model.app.addSavedSearch(name: saveName, query: model.searchText)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saved searches appear in the sidebar.")
+        }
     }
 
     @ViewBuilder

@@ -12,6 +12,7 @@ struct MessageContent {
 enum SidebarItem: Hashable {
     case dashboard
     case search
+    case savedSearch(UUID)
     case jobs
     case log
     case folder(Int64)
@@ -43,6 +44,12 @@ final class MainModel {
     var selectedFolderId: Int64? {
         if case .folder(let id) = selection { return id }
         return nil
+    }
+    var isSearchMode: Bool {
+        switch selection {
+        case .search, .savedSearch: return true
+        default: return false
+        }
     }
     var messages: [Message] = []
     var selectedMessageId: Int64?
@@ -91,7 +98,7 @@ final class MainModel {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             switch selection {
-            case .search:
+            case .search, .savedSearch:
                 messages = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, filter: filter, limit: pageSize, offset: 0)
                 searchTotal = trimmed.isEmpty ? 0 : (try? app.repository.searchMessageCount(query: trimmed, filter: filter)) ?? messages.count
             case .folder(let id):
@@ -128,7 +135,7 @@ final class MainModel {
         do {
             let next: [Message]
             switch selection {
-            case .search:
+            case .search, .savedSearch:
                 next = trimmed.isEmpty ? [] : try app.repository.searchMessages(query: trimmed, filter: filter, limit: pageSize, offset: offset)
             case .folder(let id):
                 if trimmed.isEmpty {
