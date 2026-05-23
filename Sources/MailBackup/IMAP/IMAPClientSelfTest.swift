@@ -36,6 +36,13 @@ enum IMAPClientSelfTest {
                 if let newest = uids.max() {
                     let message = try await client.fetchMessage(uid: newest)
                     print("IMAP_FETCH_OK uid=\(message.uid) bytes=\(message.rawData.count) subject=\(message.subject ?? "<none>") from=\(message.fromAddress ?? "<none>")")
+
+                    let headerUIDs = Array(uids.sorted().suffix(5))
+                    let headers = try await client.fetchHeaders(uids: headerUIDs)
+                    print("IMAP_HEADERS_OK requested=\(headerUIDs.count) got=\(headers.count) subjects=\(headers.prefix(3).map { $0.subject ?? "<none>" })")
+
+                    let body = try await client.fetchBody(uid: newest)
+                    print("IMAP_BODY_OK uid=\(newest) bytes=\(body.count)")
                 }
                 await client.disconnect()
                 print("IMAP_OK")

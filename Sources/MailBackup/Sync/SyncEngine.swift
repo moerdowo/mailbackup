@@ -72,19 +72,39 @@ final class SyncEngine {
 
                 let serverUIDs = try await client.searchAllUIDs()
                 let existing = try repository.existingUIDs(folderId: folderId)
-                let toFetch = serverUIDs.filter { !existing.contains($0) }.sorted()
+                let newUIDs = serverUIDs.filter { !existing.contains($0) }.sorted()
 
-                for (done, uid) in toFetch.enumerated() {
+                // Phase 1: fetch headers in batches and insert index rows fast,
+                // so the message list populates before bodies download.
+                var indexed = 0
+                for chunk in newUIDs.chunked(into: 200) {
                     try Task.checkCancellation()
-                    let fetched = try await client.fetchMessage(uid: uid)
-                    try store(fetched, account: account, folderId: folderId, folderName: name)
+                    let headers = try await client.fetchHeaders(uids: chunk)
+                    for header in headers {
+                        try storeHeader(header, account: account, folderId: folderId, folderName: name)
+                    }
+                    indexed += chunk.count
+                    progress(SyncProgress(
+                        phase: "Indexing \(name)…",
+                        folderName: name, folderIndex: folderIndex, folderCount: folderNames.count,
+                        messagesDone: indexed, messagesTotal: newUIDs.count
+                    ))
+                }
+
+                // Phase 2: download bodies for new UIDs plus any earlier rows
+                // whose body never arrived (interrupted run).
+                let serverUIDSet = Set(serverUIDs)
+                let pending = (try repository.bodylessUIDs(folderId: folderId))
+                    .filter { serverUIDSet.contains($0) }
+                    .sorted()
+                for (done, uid) in pending.enumerated() {
+                    try Task.checkCancellation()
+                    let data = try await client.fetchBody(uid: uid)
+                    try storeBody(data, account: account, folderId: folderId, folderName: name, uid: uid)
                     progress(SyncProgress(
                         phase: "Archiving \(name)…",
-                        folderName: name,
-                        folderIndex: folderIndex,
-                        folderCount: folderNames.count,
-                        messagesDone: done + 1,
-                        messagesTotal: toFetch.count
+                        folderName: name, folderIndex: folderIndex, folderCount: folderNames.count,
+                        messagesDone: done + 1, messagesTotal: pending.count
                     ))
                 }
 
@@ -104,11 +124,9 @@ final class SyncEngine {
         }
     }
 
-    private func store(_ fetched: FetchedMessage, account: Account, folderId: Int64, folderName: String) throws {
-        let relativePath = try archiveStore.writeEML(
-            fetched.rawData, accountId: account.id, folderName: folderName, uid: fetched.uid
-        )
-        let mime = MIMEMessage(data: fetched.rawData)
+    /// Phase 1: insert an index row from header metadata (no body file yet).
+    private func storeHeader(_ fetched: FetchedMessage, account: Account, folderId: Int64, folderName: String) throws {
+        let relativePath = archiveStore.relativePath(accountId: account.id, folderName: folderName, uid: fetched.uid)
         let message = Message(
             accountId: account.id,
             folderId: folderId,
@@ -123,12 +141,31 @@ final class SyncEngine {
             internalDate: fetched.internalDate,
             size: fetched.size,
             flags: fetched.flags.isEmpty ? nil : fetched.flags.joined(separator: " "),
-            hasAttachments: mime.hasAttachments,
+            hasAttachments: false,
             emlPath: relativePath,
-            bodyText: mime.plainText,
-            snippet: mime.snippet()
+            bodyText: nil,
+            snippet: nil,
+            hasBody: false
         )
         let stored = try repository.insertMessage(message)
         SpotlightIndexer.index(stored)
+    }
+
+    /// Phase 2: write the `.eml` and fill in body-derived fields.
+    private func storeBody(_ data: Data, account: Account, folderId: Int64, folderName: String, uid: Int) throws {
+        _ = try archiveStore.writeEML(data, accountId: account.id, folderName: folderName, uid: uid)
+        let mime = MIMEMessage(data: data)
+        try repository.updateMessageBody(
+            folderId: folderId, uid: uid,
+            bodyText: mime.plainText, snippet: mime.snippet(),
+            hasAttachments: mime.hasAttachments, size: data.count
+        )
+    }
+}
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        return stride(from: 0, to: count, by: size).map { Array(self[$0..<Swift.min($0 + size, count)]) }
     }
 }

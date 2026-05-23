@@ -22,6 +22,7 @@ struct Message: Identifiable, Codable, Equatable {
     var emlPath: String         // relative to archive root
     var bodyText: String?       // extracted plaintext, for full-text search
     var snippet: String?        // short preview for the message list
+    var hasBody: Bool           // false until the .eml body has been downloaded
     var createdAt: Date
 
     init(
@@ -43,6 +44,7 @@ struct Message: Identifiable, Codable, Equatable {
         emlPath: String,
         bodyText: String? = nil,
         snippet: String? = nil,
+        hasBody: Bool = true,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -63,6 +65,7 @@ struct Message: Identifiable, Codable, Equatable {
         self.emlPath = emlPath
         self.bodyText = bodyText
         self.snippet = snippet
+        self.hasBody = hasBody
         self.createdAt = createdAt
     }
 }
@@ -81,7 +84,7 @@ extension Message: FetchableRecord, MutablePersistableRecord {
         "id", "accountId", "folderId", "uid", "messageId", "subject",
         "fromName", "fromAddress", "toAddresses", "ccAddresses", "date",
         "internalDate", "size", "flags", "hasAttachments", "emlPath",
-        "snippet", "createdAt",
+        "snippet", "hasBody", "createdAt",
     ]
 
     static var listColumns: [Column] { listColumnNames.map { Column($0) } }

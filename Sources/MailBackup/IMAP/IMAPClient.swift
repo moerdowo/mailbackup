@@ -149,6 +149,55 @@ final class IMAPClient {
         return assembleMessage(uid: uid, from: outcome.fetchResponses)
     }
 
+    /// Batch-fetches envelope/flags metadata (no body) for many UIDs at once.
+    func fetchHeaders(uids: [Int]) async throws -> [FetchedMessage] {
+        guard !uids.isEmpty else { return [] }
+        let ranges = uids.compactMap { UID(exactly: $0) }.map { MessageIdentifierRange($0) }
+        guard let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet(ranges)) else { return [] }
+        let attributes: [FetchAttribute] = [.uid, .flags, .internalDate, .rfc822Size, .envelope]
+        let outcome = try await send(.uidFetch(.set(set), attributes, []))
+        guard outcome.isOK else { throw IMAPError.commandFailed(outcome.text) }
+        return splitAndAssemble(outcome.fetchResponses)
+    }
+
+    /// Fetches just the raw RFC822 bytes for one UID (BODY.PEEK[]).
+    func fetchBody(uid: Int) async throws -> Data {
+        guard let uidValue = UID(exactly: uid),
+              let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet<UID>(uidValue)) else {
+            throw IMAPError.commandFailed("Invalid UID \(uid)")
+        }
+        let outcome = try await send(.uidFetch(.set(set), [.bodySection(peek: true, .complete, nil)], []))
+        guard outcome.isOK else { throw IMAPError.commandFailed(outcome.text) }
+        return assembleMessage(uid: uid, from: outcome.fetchResponses).rawData
+    }
+
+    /// Splits a multi-message FETCH response (delimited by start/finish) and
+    /// assembles each into a `FetchedMessage`.
+    private func splitAndAssemble(_ responses: [FetchResponse]) -> [FetchedMessage] {
+        var result: [FetchedMessage] = []
+        var current: [FetchResponse] = []
+        func flush() {
+            if !current.isEmpty {
+                result.append(assembleMessage(uid: 0, from: current))
+                current = []
+            }
+        }
+        for response in responses {
+            switch response {
+            case .start, .startUID:
+                flush()
+                current.append(response)
+            case .finish:
+                current.append(response)
+                flush()
+            default:
+                current.append(response)
+            }
+        }
+        flush()
+        return result.filter { $0.uid > 0 }
+    }
+
     // MARK: - Send
 
     private func nextTag() -> String {

@@ -91,6 +91,27 @@ struct Repository {
         }
     }
 
+    /// UIDs of messages whose body hasn't been downloaded yet (e.g. an
+    /// interrupted headers-first run), so the next sync can complete them.
+    func bodylessUIDs(folderId: Int64) throws -> [Int] {
+        try writer.read { db in
+            try Int.fetchAll(db, sql: "SELECT uid FROM message WHERE folderId = ? AND hasBody = 0", arguments: [folderId])
+        }
+    }
+
+    func updateMessageBody(folderId: Int64, uid: Int, bodyText: String?, snippet: String?, hasAttachments: Bool, size: Int?) throws {
+        try writer.write { db in
+            try db.execute(
+                sql: """
+                UPDATE message
+                SET bodyText = ?, snippet = ?, hasAttachments = ?, size = COALESCE(?, size), hasBody = 1
+                WHERE folderId = ? AND uid = ?
+                """,
+                arguments: [bodyText, snippet, hasAttachments, size, folderId, uid]
+            )
+        }
+    }
+
     func deleteMessages(folderId: Int64) throws {
         _ = try writer.write { db in
             try Message.filter(Column("folderId") == folderId).deleteAll(db)

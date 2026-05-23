@@ -120,6 +120,13 @@ final class Database {
             }
         }
 
+        // headers-first sync: existing rows already have bodies (default true).
+        migrator.registerMigration("v5-message-hasBody") { db in
+            try db.alter(table: "message") { t in
+                t.add(column: "hasBody", .boolean).notNull().defaults(to: true)
+            }
+        }
+
         return migrator
     }
 }
