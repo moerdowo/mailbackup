@@ -73,4 +73,16 @@ extension Message: FetchableRecord, MutablePersistableRecord {
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID
     }
+
+    /// Columns needed to render lists — everything except the large `bodyText`
+    /// (which is only needed for the FTS index). Fetching without it keeps the
+    /// message list and search fast. `bodyText` decodes to nil when omitted.
+    static let listColumnNames = [
+        "id", "accountId", "folderId", "uid", "messageId", "subject",
+        "fromName", "fromAddress", "toAddresses", "ccAddresses", "date",
+        "internalDate", "size", "flags", "hasAttachments", "emlPath",
+        "snippet", "createdAt",
+    ]
+
+    static var listColumns: [Column] { listColumnNames.map { Column($0) } }
 }

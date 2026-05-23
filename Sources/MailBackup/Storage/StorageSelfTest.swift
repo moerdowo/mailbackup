@@ -86,6 +86,12 @@ enum StorageSelfTest {
             throw fail("paging pages overlap")
         }
 
+        // List projection: small fields present, large bodyText omitted (nil).
+        let all = try repository.messages(folderId: folderId, limit: 200, offset: 0)
+        guard let original = all.first(where: { $0.uid == 42 }) else { throw fail("uid 42 missing from list") }
+        guard original.subject == "Quarterly report" else { throw fail("subject lost in projection") }
+        guard original.bodyText == nil else { throw fail("bodyText should be omitted from list fetch") }
+
         // Keychain roundtrip.
         let secret = "app-password-\(UUID().uuidString)"
         try Keychain.setPassword(secret, account: account.id)

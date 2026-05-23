@@ -93,10 +93,12 @@ struct Repository {
         try writer.read { try Message.fetchOne($0, key: id) }
     }
 
-    /// A page of messages in a folder, newest first.
+    /// A page of messages in a folder, newest first. Excludes the large
+    /// `bodyText` column for speed.
     func messages(folderId: Int64, limit: Int = 2000, offset: Int = 0) throws -> [Message] {
         try writer.read { db in
             try Message
+                .select(Message.listColumns)
                 .filter(Column("folderId") == folderId)
                 .order(sql: "COALESCE(internalDate, date, createdAt) DESC")
                 .limit(limit, offset: offset)
@@ -111,7 +113,7 @@ struct Repository {
         guard !expression.isEmpty else { return [] }
 
         var sql = """
-        SELECT message.* FROM message
+        SELECT \(Repository.messageListSelection) FROM message
         JOIN message_fts ON message_fts.rowid = message.id
         WHERE message_fts MATCH ?
         """
@@ -143,6 +145,11 @@ struct Repository {
             try Int.fetchOne(db, sql: sql, arguments: StatementArguments(arguments)) ?? 0
         }
     }
+
+    /// `message.col, message.col, …` for the list columns (excludes bodyText).
+    private static let messageListSelection = Message.listColumnNames
+        .map { "message.\($0)" }
+        .joined(separator: ", ")
 
     private func appendScope(folderId: Int64?, accountId: String?, to sql: inout String, arguments: inout [DatabaseValueConvertible]) {
         if let folderId {

@@ -105,6 +105,15 @@ final class Database {
             }
         }
 
+        // Expression index matching the message-list ORDER BY, so paged folder
+        // reads use an indexed scan instead of sorting the whole folder.
+        migrator.registerMigration("v3-message-date-index") { db in
+            try db.execute(sql: """
+            CREATE INDEX IF NOT EXISTS message_folder_date
+            ON message(folderId, COALESCE(internalDate, date, createdAt) DESC)
+            """)
+        }
+
         return migrator
     }
 }
