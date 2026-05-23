@@ -20,6 +20,22 @@ struct SettingsView: View {
                         if on { Notifier.requestAuthorization() }
                     }
             }
+            Section {
+                Toggle("Encrypt local archive (.eml files)", isOn: Binding(
+                    get: { app.encryptionEnabled },
+                    set: { app.setArchiveEncryption($0) }
+                ))
+                .disabled(app.isConvertingEncryption)
+                if app.isConvertingEncryption {
+                    HStack { ProgressView().controlSize(.small); Text("Converting archive…").font(.callout) }
+                }
+            } header: {
+                Text("Security")
+            } footer: {
+                Text("Encrypts message files at rest with a key in your Keychain. The search index (subjects, senders, and body text) is not encrypted, so for full at-rest protection also keep FileVault on.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Maintenance") {
                 HStack {
                     Button {
@@ -47,11 +63,12 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 360)
+        .frame(width: 480, height: 460)
     }
 }
 
 enum AppSettings {
     static let menuBarEnabledKey = "menuBarEnabled"
     static let notificationsEnabledKey = "notificationsEnabled"
+    static let encryptArchiveKey = "encryptArchive"
 }

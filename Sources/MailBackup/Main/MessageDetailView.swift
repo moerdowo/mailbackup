@@ -61,7 +61,10 @@ struct MessageDetailView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Button {
-                        QuickLook.preview(fileURL: model.app.archiveStore.url(forRelativePath: message.emlPath))
+                        if let data = try? model.app.archiveStore.readEML(relativePath: message.emlPath) {
+                            let name = (message.subject?.isEmpty == false ? message.subject! : "message") + ".eml"
+                            QuickLook.preview(data: data, filename: name)
+                        }
                     } label: {
                         Label("Quick Look", systemImage: "eye")
                     }

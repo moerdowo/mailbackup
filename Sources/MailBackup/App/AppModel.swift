@@ -71,7 +71,8 @@ final class AppModel {
         } else {
             resolvedRoot = (try? AppPaths.defaultArchiveRoot()) ?? FileManager.default.temporaryDirectory
         }
-        let store = ArchiveStore(root: resolvedRoot)
+        let encryptArchive = UserDefaults.standard.bool(forKey: AppSettings.encryptArchiveKey)
+        let store = ArchiveStore(root: resolvedRoot, encryptionKey: ArchiveCrypto.existingKey(), encryptWrites: encryptArchive)
 
         self.database = database
         self.loadError = loadError
@@ -94,9 +95,34 @@ final class AppModel {
 
     func setArchiveRoot(_ url: URL) {
         archiveRoot = url
-        archiveStore = ArchiveStore(root: url)
+        let encryptArchive = UserDefaults.standard.bool(forKey: AppSettings.encryptArchiveKey)
+        archiveStore = ArchiveStore(root: url, encryptionKey: ArchiveCrypto.existingKey(), encryptWrites: encryptArchive)
         syncEngine = SyncEngine(repository: repository, archiveStore: archiveStore)
         UserDefaults.standard.set(url.path, forKey: AppModel.archiveRootKey)
+    }
+
+    // MARK: - Archive encryption
+
+    var encryptionEnabled: Bool { UserDefaults.standard.bool(forKey: AppSettings.encryptArchiveKey) }
+    private(set) var isConvertingEncryption = false
+
+    func setArchiveEncryption(_ enabled: Bool) {
+        guard enabled != encryptionEnabled, !isConvertingEncryption else { return }
+        guard let key = ArchiveCrypto.getOrCreateKey() else { return }
+        isConvertingEncryption = true
+        UserDefaults.standard.set(enabled, forKey: AppSettings.encryptArchiveKey)
+        archiveStore = ArchiveStore(root: archiveRoot, encryptionKey: key, encryptWrites: enabled)
+        syncEngine = SyncEngine(repository: repository, archiveStore: archiveStore)
+        activityLog.log(enabled ? "Encrypting local archive…" : "Decrypting local archive…", category: "Security")
+
+        let root = archiveRoot
+        Task.detached { [weak self] in
+            ArchiveConverter.convert(root: root, key: key, encrypt: enabled)
+            await MainActor.run {
+                self?.isConvertingEncryption = false
+                self?.activityLog.log(enabled ? "Local archive encrypted" : "Local archive decrypted", category: "Security")
+            }
+        }
     }
 
     func addAccount(_ account: Account, password: String) throws {

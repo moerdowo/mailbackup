@@ -1,12 +1,19 @@
 import Foundation
+import CryptoKit
 
 /// Reads and writes raw `.eml` files (and extracted attachments) on disk.
 /// Layout: `<root>/<accountId>/<sanitized folder>/<uid>.eml`.
+/// When `encryptWrites` is set, new files are AES-GCM encrypted; reads
+/// transparently decrypt any encrypted file when the key is available.
 struct ArchiveStore {
     let root: URL
+    var encryptionKey: SymmetricKey?
+    var encryptWrites: Bool
 
-    init(root: URL) {
+    init(root: URL, encryptionKey: SymmetricKey? = nil, encryptWrites: Bool = false) {
         self.root = root
+        self.encryptionKey = encryptionKey
+        self.encryptWrites = encryptWrites
     }
 
     func relativePath(accountId: String, folderName: String, uid: Int) -> String {
@@ -30,12 +37,22 @@ struct ArchiveStore {
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try data.write(to: fileURL, options: .atomic)
+        let payload: Data
+        if encryptWrites, let key = encryptionKey {
+            payload = ArchiveCrypto.encrypt(data, key: key)
+        } else {
+            payload = data
+        }
+        try payload.write(to: fileURL, options: .atomic)
         return relative
     }
 
     func readEML(relativePath: String) throws -> Data {
-        try Data(contentsOf: url(forRelativePath: relativePath))
+        let raw = try Data(contentsOf: url(forRelativePath: relativePath))
+        if let key = encryptionKey, ArchiveCrypto.isEncrypted(raw) {
+            return try ArchiveCrypto.decrypt(raw, key: key)
+        }
+        return raw
     }
 
     func deleteEML(relativePath: String) throws {
