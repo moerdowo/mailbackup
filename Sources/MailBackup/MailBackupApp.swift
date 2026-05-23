@@ -4,6 +4,7 @@ import SwiftUI
 struct MailBackupApp: App {
     init() {
         IMAPProbe.runHeadlessIfRequested()
+        StorageSelfTest.runHeadlessIfRequested()
     }
 
     var body: some Scene {

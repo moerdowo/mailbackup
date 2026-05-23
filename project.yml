@@ -27,6 +27,9 @@ packages:
   swift-nio-ssl:
     url: https://github.com/apple/swift-nio-ssl
     from: "2.24.0"
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "7.0.0"
 
 targets:
   MailBackup:
@@ -43,6 +46,8 @@ targets:
         product: NIOPosix
       - package: swift-nio-ssl
         product: NIOSSL
+      - package: GRDB
+        product: GRDB
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moerdowo.MailBackup
