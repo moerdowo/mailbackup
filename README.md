@@ -8,8 +8,6 @@ MailBackup connects to your IMAP accounts and keeps a local, offline copy of you
 mail as standard `.eml` files, indexed for fast full-text search. Everything stays
 on your Mac — nothing is sent anywhere else.
 
-Feature inspiration from the web-based [s1t5/mail-archiver](https://github.com/s1t5/mail-archiver), reimagined as a native single-user macOS app.
-
 ## Features
 
 - **Multiple IMAP accounts** with provider presets (Gmail, iCloud, Outlook, Fastmail, Yahoo, Purelymail, or any custom server). SSL/TLS and STARTTLS supported.
