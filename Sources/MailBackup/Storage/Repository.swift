@@ -85,6 +85,59 @@ struct Repository {
         }
     }
 
+    func message(id: Int64) throws -> Message? {
+        try writer.read { try Message.fetchOne($0, key: id) }
+    }
+
+    /// Messages in a folder, newest first.
+    func messages(folderId: Int64, limit: Int = 2000) throws -> [Message] {
+        try writer.read { db in
+            try Message
+                .filter(Column("folderId") == folderId)
+                .order(sql: "COALESCE(internalDate, date, createdAt) DESC")
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    /// Full-text search, optionally scoped to a folder or account. Newest first
+    /// within relevance is approximated by FTS rank.
+    func searchMessages(query: String, folderId: Int64? = nil, accountId: String? = nil, limit: Int = 500) throws -> [Message] {
+        let expression = Repository.ftsExpression(query)
+        guard !expression.isEmpty else { return [] }
+
+        var sql = """
+        SELECT message.* FROM message
+        JOIN message_fts ON message_fts.rowid = message.id
+        WHERE message_fts MATCH ?
+        """
+        var arguments: [DatabaseValueConvertible] = [expression]
+        if let folderId {
+            sql += " AND message.folderId = ?"
+            arguments.append(folderId)
+        } else if let accountId {
+            sql += " AND message.accountId = ?"
+            arguments.append(accountId)
+        }
+        sql += " ORDER BY rank LIMIT ?"
+        arguments.append(limit)
+
+        return try writer.read { db in
+            try Message.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+
+    /// Builds a safe FTS5 MATCH expression: each whitespace-separated term
+    /// becomes a quoted prefix query joined by implicit AND.
+    static func ftsExpression(_ input: String) -> String {
+        let terms = input.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let quoted = terms.compactMap { term -> String? in
+            let escaped = term.replacingOccurrences(of: "\"", with: "\"\"")
+            return escaped.isEmpty ? nil : "\"\(escaped)\"*"
+        }
+        return quoted.joined(separator: " ")
+    }
+
     func messageCount(accountId: String) throws -> Int {
         try writer.read { try Message.filter(Column("accountId") == accountId).fetchCount($0) }
     }

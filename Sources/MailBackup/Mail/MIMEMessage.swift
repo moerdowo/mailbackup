@@ -28,10 +28,12 @@ struct MIMEMessage {
         root = MIMEMessage.parse(Array(data))
     }
 
-    struct Attachment {
+    struct Attachment: Identifiable {
+        let id = UUID()
         var filename: String?
         var mimeType: String
         var size: Int
+        var data: Data
     }
 
     var plainText: String? {
@@ -103,10 +105,12 @@ struct MIMEMessage {
 
     private func collectAttachments(_ part: MIMEPart, into result: inout [Attachment]) {
         if part.isAttachment {
+            let decoded = MIMEMessage.decodeBody(part)
             result.append(Attachment(
                 filename: part.filename.map { RFC2047.decode($0) },
                 mimeType: part.contentType,
-                size: part.body.count
+                size: decoded.count,
+                data: decoded
             ))
         }
         for sub in part.subparts {
