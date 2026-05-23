@@ -92,6 +92,28 @@ enum StorageSelfTest {
         guard original.subject == "Quarterly report" else { throw fail("subject lost in projection") }
         guard original.bodyText == nil else { throw fail("bodyText should be omitted from list fetch") }
 
+        // Date-range filter.
+        let dateFolder = try repository.upsertFolder(Folder(accountId: account.id, name: "Dates"))
+        guard let dateFolderId = dateFolder.id else { throw fail("no date folder id") }
+        let calendar = Calendar.current
+        let today = Date()
+        let tenDaysAgo = calendar.date(byAdding: .day, value: -10, to: today)!
+        try repository.insertMessage(Message(accountId: account.id, folderId: dateFolderId, uid: 1, subject: "recent", internalDate: today, emlPath: "d/1.eml"))
+        try repository.insertMessage(Message(accountId: account.id, folderId: dateFolderId, uid: 2, subject: "old", internalDate: tenDaysAgo, emlPath: "d/2.eml"))
+
+        var fromFilter = MessageFilter()
+        fromFilter.dateFrom = calendar.date(byAdding: .day, value: -5, to: today)
+        let recent = try repository.messages(folderId: dateFolderId, filter: fromFilter, limit: 10)
+        guard recent.count == 1, recent.first?.subject == "recent" else {
+            throw fail("date 'from' filter returned \(recent.count)")
+        }
+        var toFilter = MessageFilter()
+        toFilter.dateTo = calendar.date(byAdding: .day, value: -5, to: today)
+        let older = try repository.messages(folderId: dateFolderId, filter: toFilter, limit: 10)
+        guard older.count == 1, older.first?.subject == "old" else {
+            throw fail("date 'to' filter returned \(older.count)")
+        }
+
         // Keychain roundtrip.
         let secret = "app-password-\(UUID().uuidString)"
         try Keychain.setPassword(secret, account: account.id)

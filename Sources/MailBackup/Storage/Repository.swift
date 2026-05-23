@@ -137,6 +137,13 @@ struct Repository {
             if filter.hasAttachmentOnly {
                 request = request.filter(Column("hasAttachments") == true)
             }
+            let bounds = Repository.dateBounds(filter)
+            if let from = bounds.from {
+                request = request.filter(sql: "COALESCE(internalDate, date, createdAt) >= ?", arguments: [from])
+            }
+            if let toExclusive = bounds.toExclusive {
+                request = request.filter(sql: "COALESCE(internalDate, date, createdAt) < ?", arguments: [toExclusive])
+            }
             let order = filter.sort == .oldest
                 ? "COALESCE(internalDate, date, createdAt) ASC"
                 : "COALESCE(internalDate, date, createdAt) DESC"
@@ -171,7 +178,7 @@ struct Repository {
         """
         var arguments: [DatabaseValueConvertible] = [expression]
         appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
-        appendFilter(filter, to: &sql)
+        appendFilter(filter, to: &sql, arguments: &arguments)
         switch filter.sort {
         case .oldest: sql += " ORDER BY COALESCE(message.internalDate, message.date, message.createdAt) ASC"
         case .newest: sql += " ORDER BY COALESCE(message.internalDate, message.date, message.createdAt) DESC"
@@ -198,20 +205,38 @@ struct Repository {
         """
         var arguments: [DatabaseValueConvertible] = [expression]
         appendScope(folderId: folderId, accountId: accountId, to: &sql, arguments: &arguments)
-        appendFilter(filter, to: &sql)
+        appendFilter(filter, to: &sql, arguments: &arguments)
 
         return try writer.read { db in
             try Int.fetchOne(db, sql: sql, arguments: StatementArguments(arguments)) ?? 0
         }
     }
 
-    private func appendFilter(_ filter: MessageFilter, to sql: inout String) {
+    private func appendFilter(_ filter: MessageFilter, to sql: inout String, arguments: inout [DatabaseValueConvertible]) {
         if filter.unreadOnly {
             sql += " AND (message.flags IS NULL OR message.flags NOT LIKE '%Seen%')"
         }
         if filter.hasAttachmentOnly {
             sql += " AND message.hasAttachments = 1"
         }
+        let bounds = Repository.dateBounds(filter)
+        if let from = bounds.from {
+            sql += " AND COALESCE(message.internalDate, message.date, message.createdAt) >= ?"
+            arguments.append(from)
+        }
+        if let toExclusive = bounds.toExclusive {
+            sql += " AND COALESCE(message.internalDate, message.date, message.createdAt) < ?"
+            arguments.append(toExclusive)
+        }
+    }
+
+    /// Day-granular bounds: `from` is start of its day, `to` is start of the
+    /// following day (exclusive), so both endpoints are inclusive by date.
+    private static func dateBounds(_ filter: MessageFilter) -> (from: Date?, toExclusive: Date?) {
+        let calendar = Calendar.current
+        let from = filter.dateFrom.map { calendar.startOfDay(for: $0) }
+        let toExclusive = filter.dateTo.flatMap { calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: $0)) }
+        return (from, toExclusive)
     }
 
     /// `message.col, message.col, …` for the list columns (excludes bodyText).

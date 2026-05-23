@@ -18,9 +18,9 @@ on your Mac — nothing is sent anywhere else.
 - **Incremental, headers-first sync** — UID-based; fetches envelopes first so the list fills instantly, then streams bodies. Uses `BODY.PEEK[]`, so mail is never marked read on the server, and handles `UIDVALIDITY` resets.
 - **Background sync & scheduling** — runs as an app-level task on a WAL-backed database (browse while syncing); optional per-account interval (hourly/daily). **Pause** globally or per account.
 - **Local storage** — each message saved as a portable `.eml` on disk; metadata + a full-text index in SQLite. Paged loading keeps very large mailboxes fast.
-- **Search, sort & filter** — full-text search per-folder or across **all accounts**; sort by date/relevance, filter unread / with-attachments, and **saved searches** in the sidebar.
+- **Search, sort & filter** — full-text search per-folder or across **all accounts**; sort by date/relevance, filter by unread / with-attachments / **date range**, and **saved searches** in the sidebar.
 - **Conversation view** — optional grouping into threads by subject.
-- **Reading** — three-pane UI with an HTML viewer that **blocks all remote content** (no tracking pixels), Rich/Plain toggle, savable attachments, and **Quick Look** for attachments and the raw `.eml`.
+- **Reading** — three-pane UI with an HTML viewer that **blocks all remote content** (no tracking pixels), Rich/Plain toggle, and savable attachments.
 - **Spotlight** — archived messages are indexed so macOS system search finds them.
 - **Dashboard, Jobs & Log** — sync status and stats, a live view of sync runs, and a persistent activity log.
 - **Menu bar** — mirrors the dashboard and shows a sync icon while syncing; toggle off in Settings.

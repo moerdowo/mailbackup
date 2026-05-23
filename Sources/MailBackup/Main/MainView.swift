@@ -23,6 +23,7 @@ private struct MainContent: View {
     @Bindable var model: MainModel
     @Environment(AppModel.self) private var app
     let onAddAccount: () -> Void
+    @State private var showingFilter = false
 
     var body: some View {
         NavigationSplitView {
@@ -62,27 +63,17 @@ private struct MainContent: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 if showsMessageList {
-                    Menu {
-                        Picker("Sort", selection: $model.filter.sort) {
-                            Text(MessageSort.newest.label).tag(MessageSort.newest)
-                            Text(MessageSort.oldest.label).tag(MessageSort.oldest)
-                            if model.isSearchMode {
-                                Text(MessageSort.relevance.label).tag(MessageSort.relevance)
-                            }
-                        }
-                        Divider()
-                        Toggle("Unread only", isOn: $model.filter.unreadOnly)
-                        Toggle("With attachments", isOn: $model.filter.hasAttachmentOnly)
-                        if !model.isSearchMode {
-                            Divider()
-                            Toggle("Group by conversation", isOn: $model.threaded)
-                        }
+                    Button {
+                        showingFilter.toggle()
                     } label: {
                         Label("Sort & Filter", systemImage: model.filter.isActive
                               ? "line.3.horizontal.decrease.circle.fill"
                               : "line.3.horizontal.decrease.circle")
                     }
                     .help("Sort and filter messages")
+                    .popover(isPresented: $showingFilter, arrowEdge: .bottom) {
+                        FilterPopover(model: model)
+                    }
                 }
             }
             ToolbarItem(placement: .primaryAction) {

@@ -20,7 +20,9 @@ enum MessageSort: String, CaseIterable, Identifiable {
 struct MessageFilter: Equatable {
     var unreadOnly = false
     var hasAttachmentOnly = false
+    var dateFrom: Date?
+    var dateTo: Date?
     var sort: MessageSort = .newest
 
-    var isActive: Bool { unreadOnly || hasAttachmentOnly }
+    var isActive: Bool { unreadOnly || hasAttachmentOnly || dateFrom != nil || dateTo != nil }
 }
