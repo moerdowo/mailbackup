@@ -14,6 +14,10 @@ build/
 # SwiftPM
 Package.resolved
 
+# Distribution
+dist/
+*.dmg
+
 # Misc
 *.swp
 *.moved-aside
