@@ -124,3 +124,7 @@ MAILBACKUP_IMAP_PASS='app-password' \
 ## Status
 
 This is an early, actively developed project. Contributions and issues are welcome.
+
+## License
+
+Released under the [MIT License](LICENSE).
